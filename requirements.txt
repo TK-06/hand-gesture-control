@@ -1,0 +1,9 @@
+# Runtime dependencies, pinned. Each has wheels for Windows x64 (laptop) and Linux aarch64
+# (Raspberry Pi OS 64-bit) for Python 3.11-3.13. Verified on the laptop (Python 3.13);
+# the Pi install is unverified until the hardware arrives.
+mediapipe==1.0.1
+# mediapipe depends on opencv-contrib-python; do NOT also install opencv-python (they clash).
+opencv-contrib-python==5.0.0.93
+# numpy 2.5+ needs Python >= 3.12; 2.4.x keeps Raspberry Pi OS Bookworm (Python 3.11) working.
+numpy==2.4.6
+PyYAML==6.0.3

@@ -1,0 +1,215 @@
+# handGestureControl
+
+Control your car's music with hand gestures, BMW-style. A small camera watches your hand.
+Recognized gestures become media keys (volume, play, pause, next, previous) sent over
+Bluetooth to your phone, which keeps playing through the car stereo as usual.
+
+Target hardware is a headless Raspberry Pi 4 (2 GB) that pairs with the phone as a
+**Bluetooth HID media remote**. It deliberately does not act as an audio sink, so phone
+audio is never pulled away from the car. Development and testing happen on a normal
+laptop with a webcam.
+
+> **Status:** Stages 1–2 are done: vision and gesture recognition, running on a laptop.
+> Gestures are detected and printed; sending them to a phone (Bluetooth) is the next
+> milestone. See the [Roadmap](#roadmap).
+
+> **Safety:** a hobby project, not a certified automotive product. It is meant to
+> *reduce* reaching for the phone while driving. Keep your eyes on the road and use it at
+> your own risk.
+
+## How it works
+
+```
+camera ──► MediaPipe Hand Landmarker ──► 21 hand landmarks ──► pose + motion rules ──► gesture ──► action
+ (320x240)  (detect once, then track)                          (finger states, circles,          (YAML mapping)
+                                                                swipes, open/close)
+```
+
+- **Model.** [MediaPipe Hand Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker)
+  (Tasks API) in VIDEO mode. Its palm detector only runs again when tracking is lost,
+  which keeps it light enough for a Raspberry Pi 4.
+- **No training.** Gestures are recognized with plain geometry on the landmarks. No
+  model training is needed; thresholds are tuned with your own recorded samples.
+- **Either hand.** Every rule is independent of left/right hand, rotation and distance,
+  so the driver and the passenger can both use it.
+
+## Gestures
+
+Each gesture starts with a short still "arm" pose, so ordinary hand movements (steering,
+gear changes, scratching your face) don't fire it.
+
+| Gesture | How to do it | Action (default) |
+|---|---|---|
+| `circle_cw` | Point your **index finger only**, draw circles clockwise | `volume_up` |
+| `circle_ccw` | Same, counter-clockwise | `volume_down` |
+| `fist_to_open` | Hold a **fist** still (~0.4 s), then open to **five fingers up** | `pause` |
+| `open_to_fist` | Hold **five fingers up** still (~0.4 s), then close to a **fist** | `play` |
+| `swipe_right` / `swipe_left` | Hold **index + middle finger** (V) still (~0.3 s), then swipe sideways | `next` / `previous` |
+| `swipe_down` / `swipe_up` | Same V pose, swipe down / up | `answer_call` / `end_call` |
+
+How each one works:
+
+- **Circles:** the first volume step needs one full circle; after that, every half
+  circle adds another step while you keep going. Reversing direction restarts the count.
+- **Fist ↔ open:** the change must happen in place. A hand that moves while it closes
+  (for example, dropping onto the gear knob) doesn't count.
+- **Repeating:** after a fist ↔ open or a swipe fires, lower your hand or change pose
+  before doing it again. That's why a pause never chains straight into a play, and why
+  the swipe back to the start never counts as a swipe the other way.
+- **Cooldown:** 1 s after any gesture, other gestures are ignored. Continuous circling is
+  the exception.
+- **Remapping:** change the `mapping:` section in `config/default.yaml`. Map a gesture to
+  `null` (or delete its line) to disable it.
+
+## Quickstart (laptop with a webcam)
+
+Requires Python 3.11 or newer.
+
+```bash
+python -m venv .venv
+# Windows:      .venv\Scripts\activate
+# Linux/macOS:  source .venv/bin/activate
+pip install -r requirements-dev.txt
+pip install -e .
+python scripts/download_model.py  # fetches models/hand_landmarker.task (7.8 MB)
+python -m gesturectl              # debug window; press Q to quit
+```
+
+The debug window shows:
+
+- landmarks;
+- the current pose, with the raw per-frame pose in brackets;
+- why a hand is being ignored, if it is (too small, outside the zone, low confidence);
+- each recognizer's state, the cooldown, FPS and inference time;
+- a banner for every fired action.
+
+Fired actions are also printed as `ACTION volume_up (gesture circle_cw)`.
+
+Useful options:
+
+- `--no-window` runs headless and logs FPS every 5 s.
+- `--duration 30` stops after 30 seconds.
+- `--config other.yaml` uses a different config file.
+- `--log-level DEBUG` logs more detail.
+
+If the wrong camera opens (many laptops also have an IR camera for face login), change
+`camera.index` in `config/default.yaml`.
+
+## Tune it to your hand: record, replay, test
+
+1. **Record** takes of each gesture. Use both hands and different distances, and do 5 or
+   more per gesture. Only landmark coordinates are saved, never images.
+
+   ```bash
+   python scripts/record_samples.py --label circle_cw
+   ```
+
+   SPACE starts a take, SPACE again stops and saves it to `samples/<label>/`. Q quits.
+   Each saved take is replayed straight away and marked PASS or FAIL.
+
+2. **Record "none" takes**: normal movements that must fire nothing. Reach for things,
+   grip and release the gear knob, mime steering, scratch your face, wave.
+
+   ```bash
+   python scripts/record_samples.py --label none --note "gear knob"
+   ```
+
+3. **Replay** all samples against the current config. Edit thresholds in the YAML and
+   replay again until everything passes.
+
+   ```bash
+   python scripts/replay_samples.py
+   ```
+
+4. **Test.** `pytest` runs the synthetic-hand tests plus every recorded sample in
+   `samples/`.
+
+All thresholds live in `config/default.yaml`, with comments. Distances are in "hand
+scales" (wrist to middle knuckle), so they work at any distance from the camera.
+
+## Roadmap
+
+| Stage | What | Status |
+|---|---|---|
+| 1 | Vision: camera, hand landmarks, debug overlay | ✅ done (laptop) |
+| 2 | Gesture recognition, safety gating, YAML mapping, sample recording | ✅ done (laptop) |
+| 3 | Action layer with pluggable backends (`print`, `bt_hid`) | next |
+| 4 | Bluetooth HID consumer-control device on the Pi (BlueZ): pairing, auto-reconnect | needs the Pi |
+| 5 | Answering calls: investigation only (HID has no "answer" key) | later |
+| 6 | Deployment: systemd service, rotating logs, install script | needs the Pi |
+
+## Project layout
+
+```
+config/default.yaml     all settings + gesture -> action mapping
+scripts/                download_model.py, record_samples.py, replay_samples.py
+src/gesturectl/
+  camera.py             OpenCV capture, flip/rotate, fit to 320x240
+  tracker.py            MediaPipe Hand Landmarker (VIDEO mode: detect, then track)
+  geometry.py           finger states and poses (open, fist, point, two)
+  pose_filter.py        debounce poses, bridge short tracking dropouts
+  gestures/             circle.py, grab.py, swipe.py recognizers
+  engine.py             gating (zone, size, confidence), cooldown, mapping
+  overlay.py            debug window
+  recording.py          sample file format + replay
+tests/                  synthetic-hand tests (synth.py) + recorded-sample tests
+samples/                recorded landmark samples (test data)
+```
+
+## Hardware shopping list (Pi stage; planned, not yet tested)
+
+| Part | Notes |
+|---|---|
+| Raspberry Pi 4 Model B, 2 GB | Raspberry Pi OS Lite 64-bit, headless. |
+| Case with heatsink and fan | Inference keeps the CPU busy, and cars get hot. The Pi 4 is rated for 0–50 °C ambient; a parked car in the sun is hotter than that. |
+| microSD, 32 GB, "high endurance" | Survives sudden power cuts better. |
+| Camera, either: | |
+| · Pi Camera Module (OV5647, 15-pin CSI) | Plugs straight into the Pi 4. Buy a longer ribbon (30–50 cm) for mounting. |
+| · or a UVC USB webcam | Simplest; works exactly like a laptop webcam. |
+| Car USB charger, 5 V / 3 A USB-C port, plus a good cable | A weak supply causes under-voltage throttling and crashes. |
+| Optional: NoIR camera + 850 nm IR illuminator | For night driving. **Unproven:** MediaPipe hand tracking is reported to work poorly on IR images. Test before relying on it. |
+
+## Mounting notes (planned)
+
+- **Placement.** Point the camera at a gesture zone in front of the centre stack, for
+  example from the roof console looking down (as BMW does) or from the dash looking up.
+  - Keep the gear lever out of view, or exclude it with `gating.active_zone`.
+  - Gripping and releasing the gear knob looks a lot like the fist ↔ open gestures.
+- **Glare and view.** Avoid aiming at windows: sun glare, plus hands outside the car.
+- **Orientation.** Set `camera.flip_horizontal` and `camera.rotate` so the debug image
+  matches what you see.
+  - A camera facing you (laptop, or dash looking at you) needs `flip_horizontal: true`.
+  - A roof camera looking down usually needs `false` plus a `rotate` value. With a roof
+    camera, "up" in the image means toward the windscreen, so `swipe_up` / `swipe_down`
+    become forward / backward motions.
+- **CSI ribbon (Pi 4).** The contacts face the HDMI ports; the blue tab faces the USB
+  and Ethernet ports.
+- **Cables.** Route them away from airbag zones and pedals.
+- **Power cuts.** Car USB power cuts out with the ignition, which can corrupt the SD
+  card. Stage 6 will cover this (e.g. a read-only root filesystem).
+
+## Known limitations / not yet verified
+
+- **Pi 4 performance.** Reported at about 14 FPS for one hand with older MediaPipe;
+  not measured with this code. All gesture timing is in seconds, not frames, so it
+  should behave the same at about 10 FPS. Tests replay gestures at both 10 and 30 FPS.
+- **mediapipe on the Pi.** Its metadata lists Python 3.9–3.12; it has been verified on
+  3.13 under Windows. Importing it also loads `sounddevice` and `matplotlib`, so the Pi
+  will likely need `sudo apt install libportaudio2`.
+- **Pi CSI camera.** `camera.source: picamera2` is not implemented yet (Pi stage).
+- **Night driving.** A normal RGB camera can't see a hand in a dark cabin; see the IR
+  note above.
+- **Calls.** Bluetooth HID has no "answer call" key. The call swipes are recognized, but
+  may never reach the phone (Stage 5 investigation).
+- **iPhone and play/pause.** iOS may only honour the HID Play/Pause *toggle*. If the
+  separate `play` and `pause` keys are ignored, map both grabs to `play_pause`.
+- **Open palm direction.** "Five fingers up" checks finger extension only, not which
+  way the palm faces.
+
+## License
+
+[MIT](LICENSE) © 2026 Taj Kongsaeree.
+
+The hand-tracking model (`hand_landmarker.task`) is not included in this repository.
+`scripts/download_model.py` fetches it from Google; it is part of
+[MediaPipe](https://github.com/google-ai-edge/mediapipe), licensed under Apache 2.0.

@@ -1,0 +1,75 @@
+# Hand-gesture media controller configuration.
+# Distances marked "hand scales" are multiples of the wrist -> middle-knuckle length,
+# so they work at any distance from the camera. Times are in seconds.
+
+camera:
+  source: opencv          # opencv = USB / laptop webcam (picamera2 arrives with the Pi stage)
+  index: 0                # which camera; try 1, 2... if the wrong one opens
+  backend: auto           # auto | dshow | msmf | v4l2 | any  (auto = DirectShow on Windows)
+  width: 320              # processing size; frames are resized to this
+  height: 240
+  fps: 30
+  flip_horizontal: true   # mirror so the picture matches your point of view
+  rotate: 0               # 0 | 90 | 180 | 270 clockwise, after the flip (for car mounting)
+
+tracker:
+  model: models/hand_landmarker.task
+  num_hands: 1            # 2 hands roughly halves FPS on a Pi 4
+  min_detection: 0.6
+  min_presence: 0.6
+  min_tracking: 0.5
+
+geometry:
+  extended_straightness: 0.80   # finger straight enough to count as extended
+  extended_alignment: 0.50      # ...and pointing away from the palm
+  curled_straightness: 0.55     # finger bent enough to count as curled
+  curled_alignment: 0.0         # ...or pointing back toward the wrist
+  thumb_open_distance: 0.45     # thumb tip to index knuckle (hand scales) for "five fingers"
+
+gating:
+  active_zone: [0.0, 0.0, 1.0, 1.0]  # x0, y0, x1, y1 (0..1); palm centre must be inside
+  min_hand_scale: 0.08    # ignore hands smaller than this fraction of frame height
+  min_score: 0.5
+  pose_switch_s: 0.1      # a new pose must persist this long
+  dropout_grace_s: 0.2    # tolerated tracking gaps
+  cooldown_s: 1.0         # after any gesture (continuous circling excepted)
+
+gestures:
+  circle:                 # index finger only, draw circles
+    min_step: 0.12        # hand scales; fingertip moves smaller than this are ignored
+    max_turn_deg: 135.0
+    first_step_deg: 360.0 # first volume step after one full circle...
+    step_deg: 180.0       # ...then one more step every half circle
+    reverse_reset_deg: 90.0
+    min_diameter: 0.35    # hand scales
+    idle_reset_s: 1.0
+    first_step_max_s: 3.0
+  grab:                   # fist <-> five fingers
+    arm_hold_s: 0.4       # hold the start pose still this long
+    arm_max_drift: 0.3    # hand scales
+    transition_max_s: 0.8
+    transition_max_move: 0.5  # hand scales; the hand must change pose in place
+    target_hold_s: 0.2
+  swipe:                  # index + middle finger, swipe
+    arm_hold_s: 0.3
+    arm_max_drift: 0.25
+    start_distance: 0.25
+    min_distance: 1.0     # hand scales
+    max_duration_s: 0.8
+    axis_ratio: 2.0
+
+overlay:
+  scale: 2.0              # debug window upscale
+
+# gesture -> action. This list replaces the built-in mapping: a gesture left out
+# (or mapped to null) is disabled.
+# Actions: volume_up volume_down play pause play_pause next previous answer_call end_call
+mapping:
+  circle_cw: volume_up
+  circle_ccw: volume_down
+  fist_to_open: pause
+  open_to_fist: play
+  swipe_down: answer_call
+  swipe_up: end_call
+  swipe_right: next
+  swipe_left: previous
