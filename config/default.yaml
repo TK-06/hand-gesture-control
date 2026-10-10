@@ -3,7 +3,7 @@
 # so they work at any distance from the camera. Times are in seconds.
 
 camera:
-  source: opencv          # opencv = USB / laptop webcam (picamera2 arrives with the Pi stage)
+  source: auto            # auto = Pi ribbon camera if one is found, else OpenCV | opencv | picamera2
   index: 0                # which camera; try 1, 2... if the wrong one opens
   backend: auto           # auto | dshow | msmf | v4l2 | any  (auto = DirectShow on Windows)
   width: 320              # processing size; frames are resized to this

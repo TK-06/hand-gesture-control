@@ -57,7 +57,7 @@ class ConfigError(ValueError):
 
 @dataclass
 class CameraConfig:
-    source: str = "opencv"  # "opencv" (USB / laptop webcam). "picamera2" arrives with the Pi stage.
+    source: str = "auto"  # auto (Pi ribbon camera if found, else OpenCV) | opencv | picamera2
     index: int = 0
     backend: str = "auto"  # auto | dshow | msmf | v4l2 | any
     width: int = 320  # processing size; frames are resized to this if the camera differs
@@ -187,8 +187,8 @@ def validate(cfg: AppConfig) -> None:
             raise ConfigError(f"mapping.{gesture}: unknown action {action!r}; known: {', '.join(ACTIONS)}")
 
     cam = cfg.camera
-    if cam.source not in ("opencv", "picamera2"):
-        raise ConfigError(f"camera.source: expected 'opencv' or 'picamera2', got {cam.source!r}")
+    if cam.source not in ("auto", "opencv", "picamera2"):
+        raise ConfigError(f"camera.source: expected 'auto', 'opencv' or 'picamera2', got {cam.source!r}")
     if cam.backend not in ("auto", "dshow", "msmf", "v4l2", "any"):
         raise ConfigError(f"camera.backend: unknown backend {cam.backend!r}")
     if cam.rotate not in (0, 90, 180, 270):

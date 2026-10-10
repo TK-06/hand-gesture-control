@@ -127,24 +127,50 @@ If the wrong camera opens (many laptops also have an IR camera for face login), 
 All thresholds live in `config/default.yaml`, with comments. Distances are in "hand
 scales" (wrist to middle knuckle), so they work at any distance from the camera.
 
+## Test with the real camera: videos
+
+With the Pi and camera mounted in the car, record short videos and score them on the
+laptop. The filename is the label, e.g. `swipe_left_driver_day_1.mp4` or
+`none_gearknob_1.mp4`.
+
+```bash
+python scripts/record_video.py videos/swipe_left_driver_day_1.mp4 --duration 45   # on the Pi
+python scripts/evaluate_videos.py --fps 12                                        # hit rate + false triggers
+```
+
+- `--fps` simulates the Pi's processing rate.
+- Hand tracking is cached, so re-scoring after a threshold change takes seconds.
+- `--export-samples` turns clips that behave correctly into regression tests in
+  `samples/`.
+- Videos stay in `videos/`, which is gitignored.
+
+Guides:
+
+- [docs/SETUP.md](docs/SETUP.md): Raspberry Pi setup, from flashing the card to the
+  first run.
+- [docs/RECORDING.md](docs/RECORDING.md): the shot list.
+
 ## Roadmap
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Vision: camera, hand landmarks, debug overlay | ✅ done (laptop) |
+| 1 | Vision: camera, hand landmarks, debug overlay | ✅ done (laptop); Pi camera support written, untested on hardware |
 | 2 | Gesture recognition, safety gating, YAML mapping, sample recording | ✅ done (laptop) |
+| 2b | Real-camera video recording + scoring, tuning on in-car footage | tools done; recording in progress |
 | 3 | Action layer with pluggable backends (`print`, `bt_hid`) | next |
-| 4 | Bluetooth HID consumer-control device on the Pi (BlueZ): pairing, auto-reconnect | needs the Pi |
+| 4 | Bluetooth HID consumer-control device on the Pi (BlueZ): pairing, auto-reconnect | next |
 | 5 | Answering calls: investigation only (HID has no "answer" key) | later |
-| 6 | Deployment: systemd service, rotating logs, install script | needs the Pi |
+| 6 | Deployment: systemd service, rotating logs, install script | later |
 
 ## Project layout
 
 ```
 config/default.yaml     all settings + gesture -> action mapping
-scripts/                download_model.py, record_samples.py, replay_samples.py
+docs/                   SETUP.md (Raspberry Pi), RECORDING.md (shot list)
+scripts/                download_model.py, record_samples.py, replay_samples.py,
+                        record_video.py, evaluate_videos.py
 src/gesturectl/
-  camera.py             OpenCV capture, flip/rotate, fit to 320x240
+  camera.py             OpenCV or Pi ribbon camera (picamera2), flip/rotate, fit to 320x240
   tracker.py            MediaPipe Hand Landmarker (VIDEO mode: detect, then track)
   geometry.py           finger states and poses (open, fist, point, two)
   pose_filter.py        debounce poses, bridge short tracking dropouts
@@ -152,8 +178,11 @@ src/gesturectl/
   engine.py             gating (zone, size, confidence), cooldown, mapping
   overlay.py            debug window
   recording.py          sample file format + replay
+  video.py              video recording, labels from filenames, video -> landmarks (cached)
+  evaluation.py         scoring detections against what was performed
 tests/                  synthetic-hand tests (synth.py) + recorded-sample tests
 samples/                recorded landmark samples (test data)
+videos/                 camera recordings (gitignored, private)
 ```
 
 ## Hardware shopping list (Pi stage; planned, not yet tested)
@@ -196,7 +225,8 @@ samples/                recorded landmark samples (test data)
 - **mediapipe on the Pi.** Its metadata lists Python 3.9–3.12; it has been verified on
   3.13 under Windows. Importing it also loads `sounddevice` and `matplotlib`, so the Pi
   will likely need `sudo apt install libportaudio2`.
-- **Pi CSI camera.** `camera.source: picamera2` is not implemented yet (Pi stage).
+- **Pi ribbon camera.** `camera.source: picamera2` (picked automatically by `auto`) is
+  written and tested against a stand-in, but has not run on a real Pi yet.
 - **Night driving.** A normal RGB camera can't see a hand in a dark cabin; see the IR
   note above.
 - **Calls.** Bluetooth HID has no "answer call" key. The call swipes are recognized, but

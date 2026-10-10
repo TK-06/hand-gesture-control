@@ -41,8 +41,7 @@ def main() -> int:
     results: Counter[tuple[str, bool]] = Counter()
     for path in files:
         rec = load(path)
-        fired = [e.gesture for e in replay(rec, cfg)]
-        ok, why = check(rec.label, fired)
+        ok, why = check(rec.label, replay(rec, cfg), rec.reps)
         results[(rec.label, ok)] += 1
         print(f"{'PASS' if ok else 'FAIL'}  {rec.label:<13} {path.name:<24} {why}")
 

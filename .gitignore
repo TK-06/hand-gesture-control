@@ -4,7 +4,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Downloaded by scripts/download_model.py
-models/*.task
+# Model bundle, downloaded by scripts/download_model.py (ignored wherever it ends up)
+*.task
+
+# Camera recordings: private and large. Only landmark samples (samples/) go in git.
+videos/
 
 # samples/ is intentionally tracked: recorded landmark sequences are test data.

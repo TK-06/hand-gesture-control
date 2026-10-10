@@ -24,6 +24,7 @@ NONE_LABEL = "none"  # normal movements that must NOT fire anything
 LABELS = GESTURES + (NONE_LABEL,)
 SAMPLES_DIR = PROJECT_ROOT / "samples"
 REPEATING = ("circle_cw", "circle_ccw")
+BURST_GAP_S = 1.5  # circle steps closer together than this belong to one repetition
 
 
 @dataclass
@@ -33,10 +34,11 @@ class Recording:
     frames: list[tuple[float, HandFrame | None]] = field(default_factory=list)
     created: str = ""
     note: str = ""
+    reps: int = 1  # how many times the gesture was performed in this recording
 
 
-def save(rec: Recording, path: Path) -> None:
-    if rec.label not in LABELS:
+def save(rec: Recording, path: Path, *, check_label: bool = True) -> None:
+    if check_label and rec.label not in LABELS:
         raise ValueError(f"unknown label {rec.label!r}; use one of {', '.join(LABELS)}")
     t0 = rec.frames[0][0] if rec.frames else 0.0
     frames = []
@@ -55,6 +57,7 @@ def save(rec: Recording, path: Path) -> None:
         "frame_size": list(rec.frame_size),
         "created": rec.created or datetime.now().isoformat(timespec="seconds"),
         "note": rec.note,
+        "reps": rec.reps,
         "frames": frames,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +78,14 @@ def load(path: Path) -> Recording:
             lm = np.asarray(h["landmarks"], dtype=float)
             hand = HandFrame(t=t, landmarks=lm, handedness=h["handedness"], score=float(h["score"]), frame_size=size)
         frames.append((t, hand))
-    return Recording(label=doc["label"], frame_size=size, frames=frames, created=doc.get("created", ""), note=doc.get("note", ""))
+    return Recording(
+        label=doc["label"],
+        frame_size=size,
+        frames=frames,
+        created=doc.get("created", ""),
+        note=doc.get("note", ""),
+        reps=int(doc.get("reps", 1)),
+    )
 
 
 def sample_files(root: Path = SAMPLES_DIR) -> list[Path]:
@@ -93,12 +103,27 @@ def replay(rec: Recording, cfg: AppConfig) -> list[Event]:
     return events
 
 
-def check(label: str, fired: list[str]) -> tuple[bool, str]:
-    """Did a recording labelled ``label`` fire what it should?"""
+def count_reps(events: list[Event], gesture: str, gap_s: float = BURST_GAP_S) -> int:
+    """How many times ``gesture`` was performed. One continuous circle can step the
+    volume several times, so circle steps less than ``gap_s`` apart count once."""
+    times = [e.t for e in events if e.gesture == gesture]
+    if gesture not in REPEATING:
+        return len(times)
+    count, last = 0, None
+    for t in times:
+        if last is None or t - last > gap_s:
+            count += 1
+        last = t
+    return count
+
+
+def check(label: str, events: list[Event], reps: int = 1) -> tuple[bool, str]:
+    """Did a recording labelled ``label`` (performed ``reps`` times) fire what it should?"""
+    fired = [e.gesture for e in events]
     if label == NONE_LABEL:
         return (not fired, "fired nothing" if not fired else f"should fire nothing, fired {fired}")
-    if label in REPEATING:
-        ok = bool(fired) and all(g == label for g in fired)
-        return ok, f"fired {fired}" if ok else f"expected one or more {label}, fired {fired}"
-    ok = fired == [label]
-    return ok, f"fired {fired}" if ok else f"expected exactly [{label}], fired {fired}"
+    others = [g for g in fired if g != label]
+    got = count_reps(events, label)
+    ok = not others and got == reps
+    detail = f"{got}/{reps} {label}" + (f", wrong gestures {others}" if others else "")
+    return ok, detail

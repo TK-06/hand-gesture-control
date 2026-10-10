@@ -1,5 +1,7 @@
-"""Camera sources. Frames come out BGR, oriented (flip/rotate) and fitted to the
-processing size from the config (``camera.width`` x ``camera.height`` after rotation)."""
+"""Camera sources: OpenCV (USB / laptop webcams) and picamera2 (Pi ribbon cameras).
+
+Cameras return raw BGR frames; ``prepare()`` orients them (flip/rotate) and fits them to
+the processing size from the config (``camera.width`` x ``camera.height`` after rotation)."""
 
 from __future__ import annotations
 
@@ -56,10 +58,64 @@ class OpenCVCamera:
         return f"opencv camera {self._index}: {w}x{h} @ {fps:.0f} fps (native)"
 
 
+class PicameraCamera:
+    """Raspberry Pi ribbon (CSI) cameras through picamera2 / libcamera.
+
+    picamera2 comes from apt (``sudo apt install python3-picamera2``), so the venv must be
+    created with ``--system-site-packages``. Its "RGB888" format is laid out B, G, R in
+    memory, which is exactly what OpenCV expects."""
+
+    def __init__(self, cfg: CameraConfig):
+        try:
+            from picamera2 import Picamera2
+        except ImportError as exc:
+            raise RuntimeError(
+                "camera.source is 'picamera2' but picamera2 is not importable. On the Pi: "
+                "sudo apt install python3-picamera2, and create the venv with --system-site-packages"
+            ) from exc
+        width, height = (cfg.height, cfg.width) if cfg.rotate in (90, 270) else (cfg.width, cfg.height)
+        self._cam = Picamera2(cfg.index)
+        video_cfg = self._cam.create_video_configuration(
+            main={"size": (width, height), "format": "RGB888"},
+            controls={"FrameRate": float(cfg.fps)},
+        )
+        self._cam.configure(video_cfg)
+        self._cam.start()
+        self._index = cfg.index
+        self._size = (width, height)
+        self._fps = cfg.fps
+
+    def read(self) -> np.ndarray | None:
+        return self._cam.capture_array("main")
+
+    def close(self) -> None:
+        self._cam.stop()
+        self._cam.close()
+
+    def describe(self) -> str:
+        w, h = self._size
+        return f"picamera2 camera {self._index}: {w}x{h} @ {self._fps} fps (requested)"
+
+
+def picamera2_available() -> bool:
+    """True when picamera2 imports and libcamera reports at least one camera."""
+    try:
+        from picamera2 import Picamera2
+    except Exception:
+        return False
+    try:
+        return len(Picamera2.global_camera_info()) > 0
+    except Exception:
+        return False
+
+
 def open_camera(cfg: CameraConfig) -> Camera:
-    if cfg.source == "opencv":
-        return OpenCVCamera(cfg)
-    raise NotImplementedError("camera.source 'picamera2' (Pi CSI camera) is planned for the Pi stage")
+    source = cfg.source
+    if source == "auto":
+        source = "picamera2" if picamera2_available() else "opencv"
+    if source == "picamera2":
+        return PicameraCamera(cfg)
+    return OpenCVCamera(cfg)
 
 
 def prepare(frame: np.ndarray, cfg: CameraConfig) -> np.ndarray:

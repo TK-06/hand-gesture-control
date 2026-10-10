@@ -11,13 +11,15 @@ the hardware list and mounting notes are in `README.md`; read it first.
   phone audio away from the car stereo.
 - **Phone:** iPhone.
 - **Target hardware:** Raspberry Pi 4 **2 GB**, Raspberry Pi OS Lite 64-bit, headless
-  (SSH only). Camera: CSI (OV5647) or USB webcam, chosen via config. Powered from a car
-  USB charger.
+  (SSH only). **The Pi arrived 2026-10-10** with a **ribbon (CSI) camera**. Powered from a
+  car USB charger.
+- **Car:** right-hand drive, so the driver gestures with the **left hand** and the
+  passenger with the right.
 - **Portability:** the same code runs on the laptop and the Pi; board and camera
   differences live in `config/default.yaml`.
 - **Model:** MediaPipe Hand Landmarker (Tasks API, `mediapipe==1.0.1`) in VIDEO mode,
-  one hand, 320x240. Gestures are **rule-based geometry, not a trained model**: no
-  training data or videos are needed.
+  one hand, 320x240. Gestures are **rule-based geometry, not a trained model**: there is
+  no training. Videos are for tuning thresholds and as regression tests.
 - **Gesture design** (user's, BMW-inspired; works with either hand):
   - Index finger only, circling clockwise / counter-clockwise: volume up / down.
     The first step needs 360°, then one step per 180°.
@@ -30,27 +32,27 @@ the hardware list and mounting notes are in `README.md`; read it first.
   cooldown applies (repeated circling is exempt). Hands that are too small, outside the
   active zone, or low-confidence are ignored.
 
-## Status (2026-10-02)
+## Status (2026-10-10)
 
 | Stage | Status |
 |---|---|
-| 1 Vision (camera, landmarks, debug overlay) | Done, verified on laptop (~20 FPS, ~10–14 ms inference) |
-| 2 Gestures, gating, YAML mapping, sample record/replay | Done; tested on synthetic hands only |
-| 3 Action layer: `send(action)` with `print` and `bt_hid` backends | **Next** |
-| 4 BlueZ HID on the Pi, pairing, auto-reconnect, `docs/SETUP.md` | Needs the Pi |
+| 1 Vision (camera, landmarks, debug overlay) | Done on laptop (~20 FPS, ~10–14 ms inference). picamera2 source written, **untested on the Pi** |
+| 2 Gestures, gating, YAML mapping, sample record/replay | Done; tuned on synthetic hands only |
+| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done and tested on the laptop. **The user is setting up the Pi and recording** |
+| 3 Action layer: `send(action)` with `print` and `bt_hid` backends | Next |
+| 4 BlueZ HID on the Pi, pairing, auto-reconnect (add to `docs/SETUP.md`) | Next; the Pi is here now |
 | 5 Answering calls | **Investigate and report only**; HID has no answer key |
-| 6 systemd service, rotating log, install script | Needs the Pi |
+| 6 systemd service, rotating log, install script | Later |
 
 Waiting on the user:
 
-- Live test results, plus recorded samples (`samples/`) and `replay_samples.py` output,
-  used to tune thresholds.
-- Which add-on to build next (offered, not yet answered):
-  - **A:** run the pipeline on a video file (phone footage from the car mount spot).
-  - **B:** Stage 3 with a laptop media-keys backend (control Spotify on the laptop).
-  - **C:** a Pi-speed throttle (~10 FPS).
-- Camera type and mount location (roof vs dash). These set flip/rotate and the active
-  zone.
+- Pi set up per `docs/SETUP.md`, then the first Pi FPS number (step 5).
+- `aim.jpg`, a snapshot from the mounted camera. Use it to set
+  `camera.flip_horizontal` / `rotate` and `gating.active_zone`, probably in a small
+  override YAML.
+- Videos per `docs/RECORDING.md`, copied into `videos/`. Then run
+  `python scripts/evaluate_videos.py --fps <Pi fps>`, tune `config/default.yaml`, and
+  once clips pass, `--export-samples`.
 - iPhone model and iOS version, for Stage 4.
 
 ## Commands
@@ -64,6 +66,8 @@ python -m gesturectl --no-window --duration 10   # headless smoke run, logs FPS
 pytest -q                                 # synthetic tests + every file in samples/
 python scripts/record_samples.py --label <gesture|none>
 python scripts/replay_samples.py          # PASS/FAIL per recorded sample
+python scripts/record_video.py videos/<label>_....mp4 --duration 45   # Pi, over SSH
+python scripts/evaluate_videos.py --fps 12 [--timeline] [--export-samples]
 ```
 
 ## Code map and conventions
@@ -75,6 +79,17 @@ python scripts/replay_samples.py          # PASS/FAIL per recorded sample
   `gestures/` → cooldown → `mapping`)
   → `Event(gesture, action)`.
 - `app.Pipeline` is shared by `__main__` and the recorder.
+- **Camera source.** `camera.source: auto` (the default) uses picamera2 when it imports
+  and finds a camera, else OpenCV. The same config works on the laptop and the Pi.
+- **Videos.** In `video.py`: the filename is the label (`<gesture>_..._x3`, `none_`,
+  `drive_`, `mixed_` plus a `.txt` of `m:ss gesture` lines).
+  - The recorder saves **raw** frames plus a `.json` sidecar with real per-frame
+    timestamps; cameras don't deliver even frame rates. The laptop webcam gave 18 fps
+    against a nominal 30.
+  - Landmarks are cached in `videos/.cache`, keyed on video, camera and tracker config,
+    model, and `--fps`. Re-scoring after a threshold change is instant.
+  - Scoring is in `evaluation.py`: circle steps less than 1.5 s apart are one
+    repetition (`recording.count_reps` / `BURST_GAP_S`).
 - **Units.** Thresholds are in **hand scales** (wrist → middle MCP) and **seconds**,
   never frames or pixels, so behaviour is the same at 10 FPS on the Pi and 30 FPS on
   the laptop.
@@ -103,8 +118,12 @@ python scripts/replay_samples.py          # PASS/FAIL per recorded sample
   The Pi will likely need `sudo apt install libportaudio2`. This is unverified.
 - **Laptop cameras.** The laptop webcam delivers 640x360 natively, which is
   centre-cropped to 4:3. The laptop also has an IR camera, so check `camera.index`.
-- **Not implemented yet:** `camera.source: picamera2` (Pi CSI). It raises
-  `NotImplementedError` until the Pi stage.
+- **picamera2** comes from apt only. On the Pi, the venv needs
+  `--system-site-packages`. Its `RGB888` format is BGR in memory, which OpenCV wants.
+  Trixie is recommended: its system numpy is 2.x, while Bookworm's is 1.x and may
+  clash with our numpy 2.4 pin (unverified).
+- **mediapipe logging.** The `W0000 ... inference_feedback_manager` stderr line is
+  harmless noise. `GLOG_minloglevel` doesn't silence it.
 
 ## Unverified / risks to keep flagging
 

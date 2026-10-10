@@ -74,8 +74,7 @@ def main() -> int:
                     path = SAMPLES_DIR / args.label / f"{stamp}.json"
                     save(take, path)
                     saved += 1
-                    fired = [e.gesture for e in replay(take, cfg)]
-                    ok, why = check(args.label, fired)
+                    ok, why = check(args.label, replay(take, cfg), take.reps)
                     status = f"{'PASS' if ok else 'FAIL'}: {why}"
                     print(f"saved {path.name} ({len(take.frames)} frames) -> {status}")
                     take = None
