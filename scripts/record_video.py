@@ -37,7 +37,7 @@ def main() -> int:
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fps", type=int, default=30)
-    parser.add_argument("--config", help="YAML config (camera source / index)")
+    parser.add_argument("--config", help="extra settings layered on config/default.yaml (camera source / index); rotation is not applied, frames are saved raw")
     parser.add_argument("--force", action="store_true", help="overwrite an existing file")
     args = parser.parse_args()
 

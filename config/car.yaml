@@ -1,0 +1,10 @@
+# Car (Raspberry Pi) settings, layered on top of config/default.yaml.
+# List only what differs from default.yaml; everything else, including tuned
+# thresholds, comes from there.
+#
+# Use with:  --config config/car.yaml
+
+camera:
+  rotate: 180   # the camera is mounted upside down
+  # flip_horizontal stays true from default.yaml (camera faces the driver). If a
+  # swipe_right test clip is detected as swipe_left, add  flip_horizontal: false  here.

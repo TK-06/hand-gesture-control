@@ -3,7 +3,7 @@
     python scripts/evaluate_videos.py                   # everything under videos/
     python scripts/evaluate_videos.py --fps 12          # simulate the Pi's processing rate
     python scripts/evaluate_videos.py --timeline        # list every detection with its time
-    python scripts/evaluate_videos.py --config my.yaml  # try other thresholds
+    python scripts/evaluate_videos.py --config config/car.yaml  # car camera orientation
 
 For each video: what was detected vs what the filename (or the mixed take's .txt) says
 was performed. The summary gives the hit rate per gesture and false triggers, including
@@ -32,7 +32,7 @@ from gesturectl.video import VIDEOS_DIR, find_videos, landmarks_for, parse_video
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("paths", nargs="*", type=Path, help="videos or folders (default: videos/)")
-    parser.add_argument("--config", help="YAML config (default: config/default.yaml)")
+    parser.add_argument("--config", help="extra settings layered on config/default.yaml, e.g. config/car.yaml")
     parser.add_argument("--fps", type=float, help="process only this many frames per second (simulate the Pi)")
     parser.add_argument("--tolerance", type=float, default=2.5, help="seconds of slack for mixed-take labels")
     parser.add_argument("--timeline", action="store_true", help="print every detection with its time")

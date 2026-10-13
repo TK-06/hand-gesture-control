@@ -23,7 +23,7 @@ MAX_EMPTY_READS = 50
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="gesturectl", description=__doc__.splitlines()[0])
-    parser.add_argument("--config", help="YAML config (default: config/default.yaml)")
+    parser.add_argument("--config", help="extra settings layered on config/default.yaml, e.g. config/car.yaml")
     parser.add_argument("--no-window", action="store_true", help="headless: no debug window")
     parser.add_argument("--duration", type=float, help="stop after this many seconds")
     parser.add_argument("--log-level", default="INFO")

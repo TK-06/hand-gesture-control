@@ -31,7 +31,7 @@ MAX_TAKE_S = 15.0
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--label", required=True, choices=LABELS)
-    parser.add_argument("--config", help="YAML config (default: config/default.yaml)")
+    parser.add_argument("--config", help="extra settings layered on config/default.yaml, e.g. config/car.yaml")
     parser.add_argument("--note", default="", help="free text stored in each file, e.g. 'left hand, far'")
     args = parser.parse_args()
 

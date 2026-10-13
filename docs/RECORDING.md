@@ -97,8 +97,8 @@ Leave it running while you drive normally. It saves a new file every 5 minutes
 After copying `videos/` to the laptop (see [SETUP.md](SETUP.md) step 7):
 
 ```powershell
-python scripts/evaluate_videos.py --fps <Pi FPS>              # per-clip result + summary
-python scripts/evaluate_videos.py --fps <Pi FPS> --timeline   # every detection with its time
+python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS>              # per-clip result + summary
+python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS> --timeline   # every detection with its time
 ```
 
 Each clip line reads `OK` or `FAIL`, with what was detected, the times of any false

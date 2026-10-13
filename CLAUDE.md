@@ -51,7 +51,7 @@ Waiting on the user:
   `camera.flip_horizontal` / `rotate` and `gating.active_zone`, probably in a small
   override YAML.
 - Videos per `docs/RECORDING.md`, copied into `videos/`. Then run
-  `python scripts/evaluate_videos.py --fps <Pi fps>`, tune `config/default.yaml`, and
+  `python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi fps>`, tune `config/default.yaml`, and
   once clips pass, `--export-samples`.
 - iPhone model and iOS version, for Stage 4.
 
@@ -67,7 +67,7 @@ pytest -q                                 # synthetic tests + every file in samp
 python scripts/record_samples.py --label <gesture|none>
 python scripts/replay_samples.py          # PASS/FAIL per recorded sample
 python scripts/record_video.py videos/<label>_....mp4 --duration 45   # Pi, over SSH
-python scripts/evaluate_videos.py --fps 12 [--timeline] [--export-samples]
+python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline] [--export-samples]
 ```
 
 ## Code map and conventions
@@ -98,6 +98,11 @@ python scripts/evaluate_videos.py --fps 12 [--timeline] [--export-samples]
 - **Config.** Every tunable lives in `config/default.yaml` and mirrors the dataclass
   defaults in `config.py`; `test_default_yaml_matches_code_defaults` enforces this.
   Unknown keys are errors. `mapping:` replaces the default mapping entirely.
+- **Per-machine overrides.** `--config X` is layered on top of `default.yaml`, merging
+  key by key, so tuning done in default.yaml always carries over. `config/car.yaml`
+  holds the car/Pi differences: `camera.rotate: 180` (the camera is mounted upside
+  down; user decision 2026-10-13). Always pass `--config config/car.yaml` on the Pi and
+  when evaluating car videos.
 - **Tests come first.** `tests/synth.py` builds 3D synthetic hands (any pose, size,
   rotation, left or right) and trajectories. Cover positive cases at 10 and 30 FPS with
   both hands, **plus negatives** (accidental-trigger cases).

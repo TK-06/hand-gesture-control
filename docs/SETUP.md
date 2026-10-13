@@ -86,7 +86,7 @@ The first `pip install` takes a few minutes; mediapipe and OpenCV are large.
 ## 5. First run on the Pi
 
 ```bash
-python -m gesturectl --no-window --duration 30
+python -m gesturectl --config config/car.yaml --no-window --duration 30
 ```
 
 The first log line should say `picamera2 camera 0: 320x240`. That means `camera.source:
@@ -123,7 +123,7 @@ In PowerShell, inside the project folder:
 
 ```powershell
 scp -r <user>@gesturepi.local:~/hand-gesture-control/videos .
-python scripts/evaluate_videos.py --fps <Pi FPS from step 5>
+python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS from step 5>
 ```
 
 `videos/` is in `.gitignore`: recordings stay private and are never pushed.

@@ -1,5 +1,9 @@
 """Configuration: YAML file -> typed dataclasses, with strict validation.
 
+``config/default.yaml`` holds every setting. A per-machine file such as
+``config/car.yaml`` is layered on top of it (``--config config/car.yaml``) and lists only
+what differs, so thresholds tuned in default.yaml always reach the car.
+
 Unknown keys are errors (a typo should fail loudly, not silently fall back to a default).
 Relative paths (e.g. the model) are resolved against the project root, i.e. the folder
 that contains ``config/``.
@@ -156,14 +160,31 @@ class AppConfig:
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
-    """Load and validate a YAML config. ``None`` loads config/default.yaml."""
-    path = Path(path) if path is not None else DEFAULT_CONFIG
+    """Load and validate the config. ``config/default.yaml`` is always the base; ``path``
+    (e.g. ``config/car.yaml``) is layered on top and only needs the values that differ.
+    Sections merge key by key; a ``mapping:`` in the override replaces the whole mapping."""
+    data = _read_yaml(DEFAULT_CONFIG)
+    if path is not None and Path(path).resolve() != Path(DEFAULT_CONFIG).resolve():
+        data = _merge(data, _read_yaml(Path(path)))
+    return from_dict(data)
+
+
+def _read_yaml(path: Path) -> dict[str, Any]:
     with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
     if not isinstance(data, dict):
         raise ConfigError(f"{path}: top level must be a mapping")
-    cfg = from_dict(data)
-    return cfg
+    return data
+
+
+def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in override.items():
+        if key != "mapping" and isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def from_dict(data: dict[str, Any]) -> AppConfig:

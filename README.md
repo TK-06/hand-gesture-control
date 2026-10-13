@@ -135,7 +135,7 @@ laptop. The filename is the label, e.g. `swipe_left_driver_day_1.mp4` or
 
 ```bash
 python scripts/record_video.py videos/swipe_left_driver_day_1.mp4 --duration 45   # on the Pi
-python scripts/evaluate_videos.py --fps 12                                        # hit rate + false triggers
+python scripts/evaluate_videos.py --config config/car.yaml --fps 12              # hit rate + false triggers
 ```
 
 - `--fps` simulates the Pi's processing rate.
@@ -206,7 +206,9 @@ videos/                 camera recordings (gitignored, private)
   - Gripping and releasing the gear knob looks a lot like the fist ↔ open gestures.
 - **Glare and view.** Avoid aiming at windows: sun glare, plus hands outside the car.
 - **Orientation.** Set `camera.flip_horizontal` and `camera.rotate` so the debug image
-  matches what you see.
+  matches what you see. Put car-specific settings in `config/car.yaml`, which is layered
+  on top of `default.yaml`; it currently holds `rotate: 180` for an upside-down mount.
+  Run with `--config config/car.yaml`.
   - A camera facing you (laptop, or dash looking at you) needs `flip_horizontal: true`.
   - A roof camera looking down usually needs `false` plus a `rotate` value. With a roof
     camera, "up" in the image means toward the windscreen, so `swipe_up` / `swipe_down`

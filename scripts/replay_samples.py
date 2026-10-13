@@ -22,7 +22,7 @@ from gesturectl.recording import SAMPLES_DIR, check, load, replay, sample_files
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("paths", nargs="*", type=Path, help="sample files or folders (default: samples/)")
-    parser.add_argument("--config", help="YAML config (default: config/default.yaml)")
+    parser.add_argument("--config", help="extra settings layered on config/default.yaml, e.g. config/car.yaml")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
