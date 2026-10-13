@@ -10,7 +10,8 @@ the hardware list and mounting notes are in `README.md`; read it first.
   (media keys) paired to the phone. It is NOT an A2DP sink, because that would pull
   phone audio away from the car stereo.
 - **Phone:** iPhone.
-- **Target hardware:** Raspberry Pi 4 **2 GB**, Raspberry Pi OS Lite 64-bit, headless
+- **Target hardware:** Raspberry Pi 4 **2 GB**, Raspberry Pi OS **(Legacy, 64-bit) Lite
+  = Bookworm**, Python 3.11 (not Trixie: MediaPipe 1.x crashes on a Pi 4), headless
   (SSH only). **The Pi arrived 2026-10-10** with a **ribbon (CSI) camera**. Powered from a
   car USB charger.
 - **Car:** right-hand drive, so the driver gestures with the **left hand** and the
@@ -108,10 +109,17 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline]
   both hands, **plus negatives** (accidental-trigger cases).
 - **Samples.** `samples/<label>/*.json` hold landmarks only (no images). They are
   regression test data and get committed. The `none` label means "must fire nothing".
-- **Dependencies** are pinned in `requirements.txt`. Each pin needs Windows x64 and
-  Linux aarch64 wheels, for Python 3.11–3.13. That's why numpy is held at 2.4.x (2.5
-  needs Python 3.12+). Use `opencv-contrib-python` (mediapipe depends on it); never also
-  install `opencv-python`.
+- **Dependencies** are pinned in `requirements.txt`, with **two sets chosen by
+  `platform_machine`**:
+  - **Laptop** (not aarch64): mediapipe 1.0.1, numpy 2.4.6, opencv-contrib 5.0.
+  - **Pi** (aarch64): mediapipe 0.10.18, numpy 1.26.4, opencv-contrib 4.11.0.86.
+
+  **Code must work on both** (Python 3.11 and 3.13, numpy 1.x and 2.x). Before changing
+  dependencies or tracker code, run the suite in `.venv-pi` (uv, Python 3.11, Pi
+  versions; gitignored):
+  `uv pip install --python .venv-pi/Scripts/python.exe "mediapipe==0.10.18" "opencv-contrib-python==4.11.0.86" "numpy==1.26.4" PyYAML pytest && .venv-pi/Scripts/python.exe -m pytest -q`.
+  Use `opencv-contrib-python` (mediapipe depends on it); never also install
+  `opencv-python`.
 
 ## Gotchas
 
@@ -119,22 +127,31 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline]
   - Import with `from mediapipe.tasks.python import vision` and
     `from mediapipe.tasks.python.core.base_options import BaseOptions`.
   - `import mediapipe.tasks.python as tasks` fails.
-- **Heavy imports.** Importing mediapipe also loads `sounddevice` and `matplotlib`.
-  The Pi will likely need `sudo apt install libportaudio2`. This is unverified.
+- **The Pi 4 can't run MediaPipe 1.x.** The ARM builds need AES instructions the
+  Cortex-A72 lacks: `FATAL ERROR: This binary was compiled with aes enabled` /
+  `Illegal instruction`, seen 2026-10-13.
+  - 0.10.18 is the last ARM build without that requirement, for cp39–cp312 only.
+  - Hence Raspberry Pi OS **Bookworm** (Python 3.11), not Trixie (3.13).
+  - All its dependencies have aarch64 cp311 wheels (checked).
+  - The vision API doesn't import jax/jaxlib.
+- **Pi system libraries** that mediapipe and OpenCV need on Lite: `libportaudio2`,
+  `libgl1`, `libgles2`, `libegl1`. `import mediapipe` alone doesn't load the native
+  engine; only creating a `HandLandmarker` does, so check with that.
 - **Laptop cameras.** The laptop webcam delivers 640x360 natively, which is
   centre-cropped to 4:3. The laptop also has an IR camera, so check `camera.index`.
 - **picamera2** comes from apt only. On the Pi, the venv needs
   `--system-site-packages`. Its `RGB888` format is BGR in memory, which OpenCV wants.
-  Trixie is recommended: its system numpy is 2.x, while Bookworm's is 1.x and may
-  clash with our numpy 2.4 pin (unverified).
+  On Bookworm it's built against numpy 1.x, which matches the Pi pin (1.26.4).
+  Verified on the real Pi (Trixie, 2026-10-13): `auto` picked it and it streamed
+  320x240.
 - **mediapipe logging.** The `W0000 ... inference_feedback_manager` stderr line is
   harmless noise. `GLOG_minloglevel` doesn't silence it.
 
 ## Unverified / risks to keep flagging
 
 - Pi 4 FPS with this code.
-- mediapipe on Pi OS. Bookworm ships Python 3.11, which mediapipe lists; Trixie ships
-  3.13, which it doesn't list.
+- mediapipe 0.10.18 on the real Pi 4 under Bookworm: tested on the laptop with
+  Python 3.11; confirmed working on a Pi 4 by other projects.
 - Night driving: RGB can't see a hand in the dark, and MediaPipe is reported poor on
   IR images.
 - Gear-knob grip and release can look like fist → open (pause).

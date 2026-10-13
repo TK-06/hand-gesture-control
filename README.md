@@ -189,7 +189,7 @@ videos/                 camera recordings (gitignored, private)
 
 | Part | Notes |
 |---|---|
-| Raspberry Pi 4 Model B, 2 GB | Raspberry Pi OS Lite 64-bit, headless. |
+| Raspberry Pi 4 Model B, 2 GB | Raspberry Pi OS **(Legacy, 64-bit) Lite** = Bookworm, headless. Not Trixie: see the MediaPipe note under Known limitations. |
 | Case with heatsink and fan | Inference keeps the CPU busy, and cars get hot. The Pi 4 is rated for 0–50 °C ambient; a parked car in the sun is hotter than that. |
 | microSD, 32 GB, "high endurance" | Survives sudden power cuts better. |
 | Camera, either: | |
@@ -224,9 +224,11 @@ videos/                 camera recordings (gitignored, private)
 - **Pi 4 performance.** Reported at about 14 FPS for one hand with older MediaPipe;
   not measured with this code. All gesture timing is in seconds, not frames, so it
   should behave the same at about 10 FPS. Tests replay gestures at both 10 and 30 FPS.
-- **mediapipe on the Pi.** Its metadata lists Python 3.9–3.12; it has been verified on
-  3.13 under Windows. Importing it also loads `sounddevice` and `matplotlib`, so the Pi
-  will likely need `sudo apt install libportaudio2`.
+- **mediapipe on the Pi 4.** MediaPipe 1.x for ARM needs AES CPU instructions the Pi 4
+  lacks, so it crashes there. The Pi uses **mediapipe 0.10.18 on Raspberry Pi OS
+  Bookworm (Python 3.11)**; `requirements.txt` selects it automatically on ARM Linux.
+  The laptop keeps 1.0.1. Both versions give identical landmarks on a test photo, and
+  the full test suite passes on both. See [docs/SETUP.md](docs/SETUP.md).
 - **Pi ribbon camera.** `camera.source: picamera2` (picked automatically by `auto`) is
   written and tested against a stand-in, but has not run on a real Pi yet.
 - **Night driving.** A normal RGB camera can't see a hand in a dark cabin; see the IR

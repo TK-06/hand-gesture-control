@@ -1,9 +1,19 @@
-# Runtime dependencies, pinned. Each has wheels for Windows x64 (laptop) and Linux aarch64
-# (Raspberry Pi OS 64-bit) for Python 3.11-3.13. Verified on the laptop (Python 3.13);
-# the Pi install is unverified until the hardware arrives.
-mediapipe==1.0.1
-# mediapipe depends on opencv-contrib-python; do NOT also install opencv-python (they clash).
-opencv-contrib-python==5.0.0.93
-# numpy 2.5+ needs Python >= 3.12; 2.4.x keeps Raspberry Pi OS Bookworm (Python 3.11) working.
-numpy==2.4.6
+# Runtime dependencies, pinned. pip picks the right set per machine automatically.
+# mediapipe depends on opencv-contrib-python; never also install opencv-python (they clash).
+
+# --- Laptop / desktop (Windows x64, Linux x86-64, macOS): newest MediaPipe. Python 3.11+.
+mediapipe==1.0.1 ; platform_machine != "aarch64"
+opencv-contrib-python==5.0.0.93 ; platform_machine != "aarch64"
+numpy==2.4.6 ; platform_machine != "aarch64"
+
+# --- Raspberry Pi (Linux aarch64).
+# MediaPipe 1.x for ARM is compiled to need AES crypto instructions, which the Pi 4's
+# Cortex-A72 doesn't have, so it crashes with "compiled with aes enabled". 0.10.18 is
+# the last version with ARM builds that don't, and it only has builds for Python
+# 3.9-3.12. Hence Raspberry Pi OS Bookworm (Python 3.11), where numpy must stay below 2
+# (mediapipe 0.10.18 and the apt picamera2 package both need numpy 1.x).
+mediapipe==0.10.18 ; platform_machine == "aarch64"
+opencv-contrib-python==4.11.0.86 ; platform_machine == "aarch64"
+numpy==1.26.4 ; platform_machine == "aarch64"
+
 PyYAML==6.0.3

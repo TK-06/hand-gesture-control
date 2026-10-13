@@ -10,7 +10,7 @@ Bluetooth (Stage 4) will be added to this file later.
 
 1. Install **Raspberry Pi Imager** from raspberrypi.com/software.
 2. Choose **Device:** Raspberry Pi 4. **OS:** Raspberry Pi OS (other) → **Raspberry Pi OS
-   Lite (64-bit)**. **Storage:** your microSD card.
+   (Legacy, 64-bit) Lite**, which is Debian "Bookworm". **Storage:** your microSD card.
 3. When asked about OS customisation, choose **Edit settings**:
    - **Hostname:** `gesturepi`
    - **Username and password:** your choice; you'll type these when you SSH in.
@@ -19,11 +19,14 @@ Bluetooth (Stage 4) will be added to this file later.
    - **Services** tab: **Enable SSH** (password authentication is fine).
 4. Write the card.
 
-*Which OS version:* the current Lite image is Debian "Trixie" with Python 3.13. Use it.
-mediapipe ran on Python 3.13 on the laptop, and Trixie's system numpy is 2.x, which
-matches this project. Fall back to the older **Bookworm** (Legacy) image only if
-mediapipe won't import in step 4. On Bookworm, picamera2 may conflict with numpy 2
-**(unverified)**.
+*Why Bookworm (Legacy), not the newer Trixie default:* MediaPipe 1.x for ARM is compiled
+to use AES crypto instructions. The Pi 4's processor (Cortex-A72) doesn't have them, so
+it crashes with `FATAL ERROR: This binary was compiled with aes enabled`. The last
+MediaPipe that runs on a Pi 4 is **0.10.18**, and it only exists for Python 3.9–3.12.
+Trixie has Python 3.13; Bookworm has **Python 3.11**. `requirements.txt` picks
+mediapipe 0.10.18 (with numpy 1.26 and OpenCV 4.11) automatically on the Pi. This
+combination was tested on the laptop (Python 3.11): all tests pass, and it gives the
+same hand landmarks as the laptop's MediaPipe 1.0.1.
 
 ## 2. Connect the camera (Pi switched off)
 
@@ -43,7 +46,7 @@ Insert the card, power the Pi, and wait about 2 minutes. Then, from your laptop:
 ```bash
 ssh <user>@gesturepi.local
 sudo apt update && sudo apt full-upgrade -y
-sudo reboot
+sudo reboot     # only needed if the upgrade installed a new kernel; reconnect with ssh after
 sudo apt install -y git python3-venv python3-picamera2 libportaudio2 libgl1 libgles2 libegl1
 ```
 
@@ -85,7 +88,9 @@ python -c "import picamera2; from gesturectl.config import load_config; from ges
 The last line actually starts MediaPipe's hand tracker. A plain `import mediapipe`
 isn't enough: its engine only loads its system libraries when tracking starts.
 
-The first `pip install` takes a few minutes; mediapipe and OpenCV are large.
+The first `pip install` takes a few minutes; mediapipe and its dependencies are large.
+It automatically installs the Pi versions (mediapipe 0.10.18, numpy 1.26.4, OpenCV 4.11).
+`python --version` inside the venv should say 3.11.
 
 ## 5. First run on the Pi
 
@@ -140,8 +145,10 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS from st
 | `rpicam-hello` lists no cameras | Power off, reseat the ribbon at both ends (contacts toward HDMI on the Pi side). |
 | `ImportError: libGL.so.1` | `sudo apt install -y libgl1` |
 | `OSError: libGLESv2.so.2` or `libEGL.so.1: cannot open shared object file` | `sudo apt install -y libgles2 libegl1` |
-| `ImportError` mentioning `libgthread` / `libglib` | `sudo apt install -y libglib2.0-0t64` (Trixie) or `libglib2.0-0` (Bookworm) |
+| `ImportError` mentioning `libgthread` / `libglib` | `sudo apt install -y libglib2.0-0` |
 | `OSError: PortAudio library not found` | `sudo apt install -y libportaudio2` |
 | `picamera2 is not importable` | `sudo apt install -y python3-picamera2`, and the venv must be created with `--system-site-packages` |
-| numpy errors when importing picamera2 | You're probably on Bookworm (numpy 1.x system packages). Use the Trixie image. |
+| `FATAL ERROR: This binary was compiled with aes enabled` / `Illegal instruction` | MediaPipe 1.x got installed: the Pi 4 can't run it. Check `python --version` in the venv is 3.11 (Bookworm). On Trixie (3.13) only 1.x installs, so reflash with the Legacy (Bookworm) image. |
+| `No matching distribution found for mediapipe==0.10.18` | Python is 3.13 (Trixie). Reflash with Raspberry Pi OS (Legacy, 64-bit) Lite. |
+| numpy errors when importing picamera2 | numpy 2 ended up in the venv. `pip install "numpy==1.26.4"`. The Pi set in requirements.txt pins it. |
 | Low FPS / `throttled=0x5...` | Power supply too weak, or the Pi is hot. Use a 3 A supply and a heatsink case. |
