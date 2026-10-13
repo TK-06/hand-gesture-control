@@ -43,6 +43,7 @@ Insert the card, power the Pi, and wait about 2 minutes. Then, from your laptop:
 ```bash
 ssh <user>@gesturepi.local
 sudo apt update && sudo apt full-upgrade -y
+sudo reboot
 sudo apt install -y git python3-venv python3-picamera2 libportaudio2 libgl1
 ```
 
@@ -58,7 +59,7 @@ Check the camera, then take a snapshot so you can see where it's aimed:
 
 ```bash
 rpicam-hello --list-cameras        # should list one camera, e.g. ov5647
-rpicam-still -o aim.jpg --width 640 --height 480 -t 2000
+rpicam-still -n -o aim.jpg --width 640 --height 480 -t 2000   # -n: no preview window (no screen)
 ```
 
 Copy the snapshot to your laptop. In PowerShell, inside the project folder:
