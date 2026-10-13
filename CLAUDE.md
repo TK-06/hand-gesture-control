@@ -47,7 +47,7 @@ the hardware list and mounting notes are in `README.md`; read it first.
 
 Waiting on the user:
 
-- Pi set up per `docs/SETUP.md`, then the first Pi FPS number (step 5).
+- Pi set up per `docs/SETUP.md`, then the first Pi FPS number (step 6).
 - `aim.jpg`, a snapshot from the mounted camera. Use it to set
   `camera.flip_horizontal` / `rotate` and `gating.active_zone`, probably in a small
   override YAML.

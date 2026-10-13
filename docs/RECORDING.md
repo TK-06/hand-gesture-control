@@ -94,7 +94,7 @@ Leave it running while you drive normally. It saves a new file every 5 minutes
 
 ## Check your recordings
 
-After copying `videos/` to the laptop (see [SETUP.md](SETUP.md) step 7):
+After copying `videos/` to the laptop (see [SETUP.md](SETUP.md) step 9):
 
 ```powershell
 python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS>              # per-clip result + summary

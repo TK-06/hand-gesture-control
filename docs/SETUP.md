@@ -1,154 +1,289 @@
-# Raspberry Pi setup
+# Raspberry Pi setup: step by step
 
-Target hardware is a Raspberry Pi 4 with a ribbon (CSI) camera, running headless over
-SSH. Steps marked **(unverified)** haven't been tried on real hardware yet; if one
-fails, note the exact error message.
+This takes a blank SD card to a Raspberry Pi 4 that runs the gesture controller with
+its ribbon camera, headless over SSH. Plan about **1 hour**, mostly waiting for
+downloads.
 
-Bluetooth (Stage 4) will be added to this file later.
+How to read this guide:
 
-## 1. Flash the SD card (on your laptop)
+- **Laptop (PowerShell):** run the command in PowerShell on your laptop.
+- **Pi:** run it in the SSH window, where the prompt looks like `<user>@gesturepi:~ $`.
+- **✅ Expect:** what you should see if the step worked. If you see something else,
+  check [Troubleshooting](#troubleshooting) at the bottom.
+- Replace `<user>` with the username you choose in step 1.
 
-1. Install **Raspberry Pi Imager** from raspberrypi.com/software.
-2. Choose **Device:** Raspberry Pi 4. **OS:** Raspberry Pi OS (other) → **Raspberry Pi OS
-   (Legacy, 64-bit) Lite**, which is Debian "Bookworm". **Storage:** your microSD card.
-3. When asked about OS customisation, choose **Edit settings**:
-   - **Hostname:** `gesturepi`
-   - **Username and password:** your choice; you'll type these when you SSH in.
-   - **Wireless LAN:** your home Wi-Fi, country `TH`.
-   - **Locale:** time zone `Asia/Bangkok`.
-   - **Services** tab: **Enable SSH** (password authentication is fine).
-4. Write the card.
+Bluetooth (Stage 4) will be added here later.
 
-*Why Bookworm (Legacy), not the newer Trixie default:* MediaPipe 1.x for ARM is compiled
-to use AES crypto instructions. The Pi 4's processor (Cortex-A72) doesn't have them, so
-it crashes with `FATAL ERROR: This binary was compiled with aes enabled`. The last
-MediaPipe that runs on a Pi 4 is **0.10.18**, and it only exists for Python 3.9–3.12.
-Trixie has Python 3.13; Bookworm has **Python 3.11**. `requirements.txt` picks
-mediapipe 0.10.18 (with numpy 1.26 and OpenCV 4.11) automatically on the Pi. This
-combination was tested on the laptop (Python 3.11): all tests pass, and it gives the
-same hand landmarks as the laptop's MediaPipe 1.0.1.
+---
 
-## 2. Connect the camera (Pi switched off)
+## 0. One time only: an SSH key on the laptop (2 min)
 
-1. Find the **CAMERA** connector between the HDMI ports and the audio jack.
-2. Gently lift the plastic latch.
-3. Insert the ribbon with the **metal contacts facing the HDMI ports** (blue tab toward
-   the USB/Ethernet ports).
-4. Press the latch down.
+The key lets you log in without a password, and lets Claude run commands on the Pi
+for you. If `C:\Users\<you>\.ssh\id_ed25519.pub` already exists, skip this step.
 
-The ribbon must be straight and fully inserted. Most "no camera found" problems are the
-ribbon.
-
-## 3. First boot and system packages
-
-Insert the card, power the Pi, and wait about 2 minutes. Then, from your laptop:
-
-```bash
-ssh <user>@gesturepi.local
-sudo apt update && sudo apt full-upgrade -y
-sudo reboot     # only needed if the upgrade installed a new kernel; reconnect with ssh after
-sudo apt install -y git python3-venv python3-picamera2 libportaudio2 libgl1 libgles2 libegl1
+**Laptop (PowerShell):**
+```powershell
+ssh-keygen -t ed25519      # press Enter at every question
 ```
 
-Why each package:
+---
+
+## 1. Flash the SD card (on the laptop, ~10 min)
+
+1. Install **Raspberry Pi Imager** for **Windows** from raspberrypi.com/software. It runs
+   on the laptop; the Pi's Linux system is chosen inside it.
+2. Put the SD card in the laptop. In Imager choose:
+   - **Device:** Raspberry Pi 4
+   - **OS:** Raspberry Pi OS (other) → **Raspberry Pi OS (Legacy, 64-bit) Lite**. This
+     is Debian "Bookworm". **Not** the default "Raspberry Pi OS Lite": see the box below.
+   - **Storage:** your SD card
+3. Copy your public key to the clipboard. **Laptop (PowerShell):**
+   ```powershell
+   Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub | Set-Clipboard
+   ```
+4. In the customisation settings (screens differ a little between Imager versions):
+
+   | Setting | Value |
+   |---|---|
+   | Hostname | `gesturepi` |
+   | Username / password | your choice. The password is needed for `sudo` commands, so remember it. |
+   | Wi-Fi | your home network, country `TH` |
+   | Time zone | `Asia/Bangkok` |
+   | SSH | enabled, **public-key only**. Paste with Ctrl+V. It must start with `ssh-ed25519 AAAA`. |
+   | Raspberry Pi Connect | leave **off** (not needed; SSH covers it) |
+
+5. Write the card. It erases everything on it.
+
+✅ **Expect:** "Write successful".
+
+> **Paste the key, not the fingerprint.** `ssh-keygen` also prints a line starting
+> with `SHA256:...`. That's the fingerprint; pasting it gives
+> `Permission denied (publickey)` later. The command in step 3 copies the right thing.
+
+> **Why Bookworm (Legacy), not Trixie.** MediaPipe 1.x for ARM is compiled to use AES
+> crypto instructions. The Pi 4's processor (Cortex-A72) doesn't have them, so it
+> crashes with `FATAL ERROR: This binary was compiled with aes enabled`. The last
+> MediaPipe that runs on a Pi 4 is **0.10.18**, and it only exists for Python 3.9–3.12.
+> Trixie has Python 3.13; Bookworm has **3.11**. `requirements.txt` installs
+> mediapipe 0.10.18 (with numpy 1.26 and OpenCV 4.11) automatically on the Pi. This
+> combination was tested on the laptop under Python 3.11: all tests pass, and it gives
+> the same hand landmarks as the laptop's MediaPipe 1.0.1.
+
+---
+
+## 2. Connect the camera (Pi unplugged)
+
+1. On the Pi, find the **CAMERA** connector between the micro-HDMI ports and the audio
+   jack.
+2. Gently lift its plastic latch.
+3. Slide the ribbon in with the **metal contacts facing the HDMI ports** (blue tab
+   toward the USB/Ethernet ports).
+4. Press the latch down.
+
+Check the other end at the camera board too. The ribbon must be straight and fully in;
+most "no camera" problems are the ribbon.
+
+---
+
+## 3. First boot and log in (~3 min)
+
+1. Put the SD card in the Pi and plug in power (USB-C, 5 V / 3 A).
+2. **Wait 2–3 minutes.** The first boot sets itself up and restarts once.
+3. **Laptop (PowerShell):**
+   ```powershell
+   ssh-keygen -R gesturepi.local     # forget any previous Pi with this name (needed after a reflash)
+   ssh <user>@gesturepi.local
+   ```
+4. Type **`yes`** when asked *"Are you sure you want to continue connecting?"*.
+
+✅ **Expect:** the prompt changes to `<user>@gesturepi:~ $`, with no password asked. All
+**Pi:** commands from here on go in this window.
+
+---
+
+## 4. System packages and camera check (~10–15 min)
+
+**Pi:**
+```bash
+sudo apt update && sudo apt full-upgrade -y
+```
+`sudo` asks for **your password** (the one from Imager). Nothing appears while you type
+it; that's normal. This updates the whole system.
+
+If the output mentions a **new kernel** (`linux-image-...` being installed), restart and
+reconnect: `sudo reboot`, wait 1 minute, then `ssh <user>@gesturepi.local` again. If it
+only updated a few small packages, skip the reboot.
+
+**Pi:**
+```bash
+sudo apt install -y git python3-venv python3-picamera2 libportaudio2 libgl1 libgles2 libegl1
+rpicam-hello --list-cameras
+```
 
 | Package | Why |
 |---|---|
-| `python3-picamera2` | The ribbon-camera library. It only installs from apt, not pip. |
-| `libportaudio2` | mediapipe imports an audio library at start-up. |
-| `libgl1` | The OpenCV build that mediapipe requires needs it, even on a headless Pi. |
-| `libgles2`, `libegl1` | mediapipe's engine links against OpenGL ES / EGL even when it only uses the CPU. Lite doesn't include them. |
+| `git` | to download the project |
+| `python3-venv` | to give the project its own Python environment |
+| `python3-picamera2` | the ribbon-camera library (apt only, not pip) |
+| `libportaudio2` | mediapipe loads an audio library at start-up |
+| `libgl1`, `libgles2`, `libegl1` | graphics libraries OpenCV and mediapipe's engine need, even on a Pi with no screen. Lite doesn't include them. |
 
-Check the camera, then take a snapshot so you can see where it's aimed:
+✅ **Expect:** `rpicam-hello` lists one camera, like `0 : ov5647 [2592x1944 ...]`.
 
+**Optional, see the camera's view.** Take a photo. It waits 5 s, so you can get into
+position, and `--rotation 180` turns it upright for an upside-down mount:
+
+**Pi:**
 ```bash
-rpicam-hello --list-cameras        # should list one camera, e.g. ov5647
-rpicam-still -n -o aim.jpg --width 640 --height 480 -t 2000   # -n: no preview window (no screen)
+rpicam-still -n -o aim.jpg --width 640 --height 480 -t 5000 --rotation 180
 ```
-
-Copy the snapshot to your laptop. In PowerShell, inside the project folder:
-
+**Laptop (PowerShell)**, inside the project folder. Mind the **`.`** at the end:
 ```powershell
 scp <user>@gesturepi.local:aim.jpg .
 ```
+Run the same two commands again to retake it. `*.jpg` is in `.gitignore`, so the photo
+is never pushed.
 
-## 4. Install the project
+---
 
+## 5. Install the project (~10 min)
+
+**Pi:**
 ```bash
 git clone https://github.com/TK-06/hand-gesture-control.git
 cd hand-gesture-control
-python3 -m venv --system-site-packages .venv   # system packages: so picamera2 (from apt) is visible
+python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
+python --version
+```
+✅ **Expect:** the prompt now starts with `(.venv)`, and the version is **Python
+3.11.x**. If it says 3.13, you flashed the wrong OS; go back to step 1.
+
+`--system-site-packages` lets the project see the camera library installed by apt.
+
+**Pi:**
+```bash
 pip install -r requirements.txt
 pip install -e .
 python scripts/download_model.py
+```
+✅ **Expect:** `Successfully installed ... mediapipe-0.10.18 ... numpy-1.26.4 ...
+opencv-contrib-python-4.11.0.86 ...`, then `Saved .../models/hand_landmarker.task`.
+
+These messages during `pip install` are **harmless**:
+- *"Not uninstalling … outside environment"*: pip leaves the system's own copies alone
+  and installs ours inside `.venv`.
+- *"ERROR: pip's dependency resolver … types-seaborn requires pandas-stubs"*: this is
+  about a package Raspberry Pi OS ships for itself, unrelated to us. Nothing failed.
+
+Final check: this actually starts the hand tracker. A plain `import mediapipe` would
+not catch missing system libraries.
+
+**Pi:**
+```bash
 python -c "import picamera2; from gesturectl.config import load_config; from gesturectl.tracker import HandTracker; c = load_config(); HandTracker(c.tracker, c.model_path()).close(); print('hand tracker ok')"
 ```
+✅ **Expect:** `hand tracker ok` (possibly after some `INFO`/`W0000` log lines, which are
+fine).
 
-The last line actually starts MediaPipe's hand tracker. A plain `import mediapipe`
-isn't enough: its engine only loads its system libraries when tracking starts.
+---
 
-The first `pip install` takes a few minutes; mediapipe and its dependencies are large.
-It automatically installs the Pi versions (mediapipe 0.10.18, numpy 1.26.4, OpenCV 4.11).
-`python --version` inside the venv should say 3.11.
+## 6. First run (1 min)
 
-## 5. First run on the Pi
-
+**Pi:**
 ```bash
-python -m gesturectl --config config/car.yaml --no-window --duration 30
+python -m gesturectl --config config/car.yaml --no-window --duration 60
 ```
+`config/car.yaml` holds the car settings, layered on `config/default.yaml`; for now it
+just rotates the upside-down camera.
 
-The first log line should say `picamera2 camera 0: 320x240`. That means `camera.source:
-auto` found the ribbon camera. Every 5 s it logs FPS and inference time, which are the
-first real Pi 4 numbers. Hold your hand in front of the camera during the run so the
-"hand in N% of frames" figure means something. **Note the FPS:** you'll pass it to the
-video evaluator as `--fps`.
+While it runs, hold your hand **30–60 cm** from the camera and do these, pausing a few
+seconds between each:
 
-## 6. Recording test videos
+| Do this | ✅ Look for |
+|---|---|
+| Hold an open hand still for a few seconds | `hand in N% of frames` goes up |
+| Index finger only, **~1.5 slow circles clockwise** | `ACTION volume_up` |
+| Same, **counter-clockwise** | `ACTION volume_down` |
+| Hold a **fist** still ~½ s, then open to **five fingers** | `ACTION pause` |
+| Hold **five fingers** still ~½ s, then close to a **fist** | `ACTION play` |
+| Hold **two fingers** (finger gun or V) still ~½ s, then **swipe right** / **left** | `ACTION next` / `ACTION previous` |
 
-See [RECORDING.md](RECORDING.md) for the shot list. Each recording is one command over
-SSH:
+Directions are as **you** see them.
 
+✅ **Expect:**
+- a line containing `picamera2 camera 0: 320x240`, which means the ribbon camera is in
+  use;
+- every 5 s, a line like `9.8 fps, inference 85 ms, hand in 60% of frames`.
+
+**Write down the FPS.** It's the first real Pi 4 number, and you'll pass it to the
+video evaluator as `--fps`. Don't worry if some gestures don't fire yet; thresholds
+get tuned on your real videos next.
+
+---
+
+## 7. Everyday use
+
+| What | Command |
+|---|---|
+| Log in | **Laptop:** `ssh <user>@gesturepi.local` |
+| Start of every session | **Pi:** `cd ~/hand-gesture-control && source .venv/bin/activate` |
+| Get the latest code (after a push from the laptop) | **Pi:** `git pull` |
+| Shut down: **always** before unplugging, to protect the SD card | **Pi:** `sudo poweroff`, then wait for the green light to stop blinking |
+
+---
+
+## 8. Recording test videos
+
+See [RECORDING.md](RECORDING.md) for the shot list. Each recording is one command:
+
+**Pi:**
 ```bash
-cd ~/hand-gesture-control && source .venv/bin/activate
 python scripts/record_video.py videos/swipe_left_driver_day_1.mp4 --duration 45
 ```
+It counts down 3 seconds, then records. Ctrl+C stops early. Frames are saved raw, so the
+rotation from `car.yaml` is applied later, when evaluating.
 
-It counts down 3 seconds, then records. Ctrl+C stops early.
-
-**In the car**, there is no home Wi-Fi:
+**In the car** there's no home Wi-Fi:
 1. Turn on your iPhone's **Personal Hotspot**.
-2. Add the hotspot to the Pi once, while still at home:
-   `sudo nmcli dev wifi connect "<hotspot name>" password "<password>"`.
-3. SSH from your laptop on the same hotspot, or from the phone with an SSH app such as
-   Termius.
+2. Add the hotspot to the Pi once, while still at home. **Pi:**
+   `sudo nmcli dev wifi connect "<hotspot name>" password "<password>"`
+3. Connect the laptop to the same hotspot and SSH in as usual. A phone with an SSH app
+   such as Termius also works, but needs its own key.
 
-Power the Pi from a 5 V / 3 A car charger or a power bank. Under-voltage causes dropped
-frames: `vcgencmd get_throttled` should print `throttled=0x0`.
+Power the Pi from a **5 V / 3 A** car charger or a power bank. Under-voltage causes
+dropped frames: **Pi:** `vcgencmd get_throttled` should print `throttled=0x0`.
 
-## 7. Copy videos to the laptop and evaluate
+---
 
-In PowerShell, inside the project folder:
+## 9. Copy videos to the laptop and evaluate
 
+**Laptop (PowerShell)**, inside the project folder:
 ```powershell
 scp -r <user>@gesturepi.local:~/hand-gesture-control/videos .
-python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS from step 5>
+python scripts/evaluate_videos.py --config config/car.yaml --fps <your FPS from step 6>
 ```
-
 `videos/` is in `.gitignore`: recordings stay private and are never pushed.
+
+---
 
 ## Troubleshooting
 
-| Symptom | Try |
+| Symptom | Fix |
 |---|---|
+| Imager: *"Error writing to storage device"* | Close Imager, unplug and replug the card reader, try again. Then try: Imager → OS → **Erase** first, a different USB port (not a hub), running Imager as administrator, another reader, another card. |
+| `Permission denied (publickey)` | The Pi doesn't have your key. Usually the **fingerprint** (`SHA256:...`) was pasted instead of the key. Reflash, using the `Set-Clipboard` command from step 1. Also check the username. |
+| `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED` | Normal after a reflash. **Laptop:** `ssh-keygen -R gesturepi.local`, then ssh again. |
 | `ssh: Could not resolve hostname gesturepi.local` | Wait another minute; check the Wi-Fi details in Imager; or use the Pi's IP address from your router's device list. |
-| `rpicam-hello` lists no cameras | Power off, reseat the ribbon at both ends (contacts toward HDMI on the Pi side). |
-| `ImportError: libGL.so.1` | `sudo apt install -y libgl1` |
+| `[sudo] password for <user>:` | Type the Imager password; nothing shows while typing. Forgot it? There's no recovery: reflash with a new password (the key can stay). |
+| `scp` prints only a `usage:` message | The destination is missing: add ` .` at the end of the command. |
+| `rpicam-hello` lists no cameras | `sudo poweroff`, unplug, reseat the ribbon at both ends (contacts toward HDMI on the Pi side). |
+| `FATAL ERROR: This binary was compiled with aes enabled` / `Illegal instruction` | MediaPipe 1.x got installed, and the Pi 4 can't run it. `python --version` in the venv must say 3.11. If it's 3.13 (Trixie), reflash with the Legacy (Bookworm) image. |
+| `No matching distribution found for mediapipe==0.10.18` | Python is 3.13 (Trixie). Reflash with Raspberry Pi OS (Legacy, 64-bit) Lite. |
 | `OSError: libGLESv2.so.2` or `libEGL.so.1: cannot open shared object file` | `sudo apt install -y libgles2 libegl1` |
+| `ImportError: libGL.so.1` | `sudo apt install -y libgl1` |
 | `ImportError` mentioning `libgthread` / `libglib` | `sudo apt install -y libglib2.0-0` |
 | `OSError: PortAudio library not found` | `sudo apt install -y libportaudio2` |
 | `picamera2 is not importable` | `sudo apt install -y python3-picamera2`, and the venv must be created with `--system-site-packages` |
-| `FATAL ERROR: This binary was compiled with aes enabled` / `Illegal instruction` | MediaPipe 1.x got installed: the Pi 4 can't run it. Check `python --version` in the venv is 3.11 (Bookworm). On Trixie (3.13) only 1.x installs, so reflash with the Legacy (Bookworm) image. |
-| `No matching distribution found for mediapipe==0.10.18` | Python is 3.13 (Trixie). Reflash with Raspberry Pi OS (Legacy, 64-bit) Lite. |
-| numpy errors when importing picamera2 | numpy 2 ended up in the venv. `pip install "numpy==1.26.4"`. The Pi set in requirements.txt pins it. |
+| numpy errors when importing picamera2 | numpy 2 ended up in the venv: `pip install "numpy==1.26.4"` |
 | Low FPS / `throttled=0x5...` | Power supply too weak, or the Pi is hot. Use a 3 A supply and a heatsink case. |
