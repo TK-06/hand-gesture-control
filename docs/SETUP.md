@@ -293,15 +293,17 @@ recognized but do nothing yet.
 cd ~/hand-gesture-control
 sudo scripts/pi/install_services.sh
 ```
-This installs two services that start at every boot and restart by themselves if they
-ever stop:
+This installs services that start at every boot. The first two restart by themselves
+if they ever stop:
 
 | Service | What it does |
 |---|---|
 | `gesturectl-hid` | the Bluetooth remote; keeps the phone connected |
 | `gesturectl` | camera + gesture recognition; sends actions to `gesturectl-hid` |
+| `gesturectl-tmux` | the shared terminal session for watching live (step 10); only if tmux is installed |
 
-✅ **Expect:** both `Active: active (running)`.
+✅ **Expect:** `gesturectl-hid` and `gesturectl` show `Active: active (running)`.
+`gesturectl-tmux` shows `active (exited)`, which is normal: it only creates the session.
 
 From then on there's nothing to type. Power on the Pi; about 30–60 s later your iPhone
 reconnects by itself (with Bluetooth on) and gestures work.
@@ -313,7 +315,7 @@ reconnects by itself (with Bluetooth on) and gestures work.
   remote restarts while the phone stays connected), the remote drops the link on
   purpose. The iPhone reconnects within a few seconds.
 
-`sudo scripts/pi/install_services.sh --uninstall` stops and removes both services.
+`sudo scripts/pi/install_services.sh --uninstall` stops and removes all of them.
 
 ---
 
@@ -342,12 +344,15 @@ The same logs are also saved, rotating at 1 MB × 5, in `~/hand-gesture-control/
 (`gesturectl.log`, `hid.log`). That's how you see afterwards what happened on a drive.
 
 **Watch what Claude runs on the Pi.** Claude runs long commands inside a shared terminal
-session called `gesturectl`. To watch it read-only, so you can't type into it by
-accident. **Laptop (PowerShell):**
+session called `gesturectl`, which is created at every boot. To watch it read-only, so
+you can't type into it by accident. **Laptop (PowerShell):**
 ```powershell
 ssh -t <user>@gesturepi.local tmux attach -r -t gesturectl
 ```
 Leave it with **Ctrl+B**, then **D**. The session keeps running.
+
+If it says `can't find session`, run `sudo scripts/pi/install_services.sh` once on the
+Pi: installs from before this was added don't have the service that creates it.
 
 ---
 

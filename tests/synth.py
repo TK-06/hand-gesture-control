@@ -26,7 +26,12 @@ _LENGTHS = {
 }
 _FAN_DEG = {"index": -8.0, "middle": 0.0, "ring": 6.0, "pinky": 14.0}
 # Flexion (degrees) at MCP, PIP, DIP.
-_FLEX = {"extended": (0.0, 5.0, 5.0), "curled": (85.0, 100.0, 60.0), "half": (40.0, 50.0, 30.0)}
+_FLEX = {
+    "extended": (0.0, 5.0, 5.0),
+    "curled": (85.0, 100.0, 60.0),
+    "half": (40.0, 50.0, 30.0),
+    "knuckle": (90.0, 5.0, 5.0),  # straight finger bent only at the knuckle: pointing at the camera
+}
 _THUMB = {
     "extended": [(-0.25, -0.15, 0.0), (-0.45, -0.30, 0.0), (-0.62, -0.46, 0.0), (-0.78, -0.62, 0.0)],
     "tucked": [(-0.25, -0.15, 0.0), (-0.36, -0.36, -0.10), (-0.26, -0.58, -0.18), (-0.12, -0.75, -0.20)],
@@ -47,6 +52,9 @@ POSES = {
     "thumb": ({"index": _C, "middle": _C, "ring": _C, "pinky": _C}, "extended"),
     # "phone" / "call me": thumb + pinky out
     "phone": ({"index": _C, "middle": _C, "ring": _C, "pinky": _E}, "extended"),
+    # index pointing straight at the camera (the natural way to draw volume circles)
+    "point_at_camera": ({"index": "knuckle", "middle": _C, "ring": _C, "pinky": _C}, "tucked"),
+    "point_at_camera_thumb_out": ({"index": "knuckle", "middle": _C, "ring": _C, "pinky": _C}, "extended"),
 }
 
 THUMB_AXIS = (2, 4)  # thumb MCP -> thumb tip

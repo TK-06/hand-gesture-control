@@ -62,7 +62,20 @@ Waiting on the user:
 - In-car footage per `docs/RECORDING.md`. Then evaluate with
   `--config config/car.yaml --fps 9`, tune, and run `--export-samples`.
 - Check whether the iPhone's on-screen keyboard stays available while connected.
-- Whether clockwise circles feel easier now (first step 270°).
+- **Left-hand clockwise circles are still hard; the right hand is fine** (user,
+  2026-10-13). Desk clips: `videos/circle_cw_{left,right}_desk_1.mp4` (laptop and Pi,
+  gitignored). Two causes found:
+  - The index pointing toward the camera was read as curled, so the pose flipped to
+    FIST/THUMB and the circle reset. **Fixed** by `geometry.index_pointing`
+    (`point_straightness`, `point_min_alignment`): left clip 3/5 at `--fps 9`.
+  - With `tracker.num_hands: 1` MediaPipe can lock onto a resting hand (e.g. at the
+    chin, read as THUMB: a false `next` every 2 s). `num_hands: 2` gave left 4/5 and
+    continuous circling on the right clip (0/5 with one hand), but costs 25 vs 14 ms
+    per frame on the laptop. **Not adopted:** measure FPS on the Pi first; at ~5 fps
+    circles may exceed `max_turn_deg`.
+  - The Pi doesn't have the fix yet: after a push, `git pull`,
+    `sudo scripts/pi/install_services.sh` (adds `gesturectl-tmux`), then
+    `sudo systemctl restart gesturectl` (`enable --now` doesn't restart a running service).
 
 ## Commands
 
@@ -110,7 +123,8 @@ The user watches long-running Pi commands live with
 - **Services.** `scripts/pi/install_services.sh` installs `gesturectl-hid` and
   `gesturectl` (templates in `scripts/pi/`): `Restart=always`, `--log-file logs/*.log`
   (1 MB × 5). Stop `gesturectl` before `record_video.py`, because the camera is
-  exclusive.
+  exclusive. If tmux is installed it also adds `gesturectl-tmux`, a oneshot that
+  recreates the shared `gesturectl` tmux session at boot.
 - **Camera source.** `camera.source: auto` (the default) uses picamera2 when it imports
   and finds a camera, else OpenCV. The same config works on the laptop and the Pi.
 - **Videos.** In `video.py`: the filename is the label (`<gesture>_..._x3`, `none_`,

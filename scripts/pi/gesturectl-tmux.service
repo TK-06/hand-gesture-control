@@ -1,0 +1,18 @@
+# Template: scripts/pi/install_services.sh fills in __USER__ and __DIR__.
+# A shared tmux session named "gesturectl", recreated at every boot, for watching
+# commands live:  ssh -t <user>@gesturepi.local tmux attach -r -t gesturectl
+[Unit]
+Description=Shared tmux session 'gesturectl' for watching commands live
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=__USER__
+WorkingDirectory=__DIR__
+# Only creates the session if it's missing, so re-running the installer is harmless
+ExecStart=/bin/sh -c '/usr/bin/tmux has-session -t gesturectl 2>/dev/null || exec /usr/bin/tmux new-session -d -s gesturectl -c __DIR__'
+ExecStop=-/usr/bin/tmux kill-session -t gesturectl
+
+[Install]
+WantedBy=multi-user.target

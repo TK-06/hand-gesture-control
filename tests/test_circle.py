@@ -102,3 +102,9 @@ def test_short_tracking_dropout_is_bridged():
 
 def test_straight_line_with_pointing_finger_does_not_fire():
     assert run(track(1.5, "point", line_path((60.0, 120.0), (260.0, 120.0), 0.3, 1.0))) == []
+
+
+@pytest.mark.parametrize("mirror", [False, True])
+def test_circles_with_the_finger_pointing_at_the_camera(mirror):
+    frames = track(1.5, "point_at_camera", circle_path(radius=30.0, period=1.0, t_start=0.3), fps=9, mirror=mirror)
+    assert run(frames) == ["circle_cw"]

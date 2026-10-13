@@ -105,6 +105,10 @@ class GeometryConfig:
     curled_straightness: float = 0.55
     curled_alignment: float = 0.0
     thumb_open_distance: float = 0.45  # thumb tip to index MCP, in hand-scale units
+    # A straight index finger counts as pointing even when bent at the knuckle, i.e.
+    # pointing toward the camera (the natural way to draw volume circles).
+    point_straightness: float = 0.88
+    point_min_alignment: float = -0.6
 
 
 @dataclass

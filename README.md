@@ -64,7 +64,8 @@ How they work:
   hold, so a hand passing through a pose never fires. To do the same one again, lower
   your hand (or show something else) first.
 - **Circles:** the first volume step needs ¾ of a circle; after that, every half circle
-  adds another step while you keep going. Reversing direction restarts the count.
+  adds another step while you keep going. Reversing direction restarts the count. The
+  finger can point up or toward the camera; both count as "index finger only".
 - **Repeat:** next / previous fire again every 2 s while you keep holding the thumb out.
 - **Cooldown:** 1 s after any gesture, other gestures are ignored. Continuous circling is
   the exception.

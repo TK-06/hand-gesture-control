@@ -29,6 +29,8 @@ EXPECTED = {
     "gun": Pose.TWO,  # two fingers + thumb out still counts as the swipe pose
     "thumb": Pose.THUMB,  # fist with the thumb out
     "phone": Pose.PHONE,  # thumb + pinky out
+    "point_at_camera": Pose.POINT,  # straight index aimed at the camera, bent only at the knuckle
+    "point_at_camera_thumb_out": Pose.POINT,  # ...even with the thumb sticking out (not "thumb")
 }
 
 

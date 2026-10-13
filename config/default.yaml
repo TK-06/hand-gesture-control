@@ -25,6 +25,8 @@ geometry:
   curled_straightness: 0.55     # finger bent enough to count as curled
   curled_alignment: 0.0         # ...or pointing back toward the wrist
   thumb_open_distance: 0.45     # thumb tip to index knuckle (hand scales) for "five fingers"
+  point_straightness: 0.88      # a straight index counts as pointing even when aimed at the camera
+  point_min_alignment: -0.6
 
 gating:
   active_zone: [0.0, 0.0, 1.0, 1.0]  # x0, y0, x1, y1 (0..1); palm centre must be inside

@@ -78,10 +78,22 @@ def thumb_extended(lm: np.ndarray, cfg: GeometryConfig) -> bool:
     return bool(far and outward)
 
 
+def index_pointing(lm: np.ndarray, cfg: GeometryConfig, state: FingerState) -> bool:
+    """Extended, or straight but bent at the knuckle: pointing toward the camera. A
+    fist's index is bent in the middle (low straightness), so it never qualifies."""
+    if state is FingerState.EXTENDED:
+        return True
+    straightness, alignment = _finger_metrics(lm, FINGERS["index"])
+    return straightness >= cfg.point_straightness and alignment > cfg.point_min_alignment
+
+
 def classify_pose(lm: np.ndarray, cfg: GeometryConfig) -> Pose:
     states = finger_states(lm, cfg)
     extended = {n for n, s in states.items() if s is FingerState.EXTENDED}
     curled = {n for n, s in states.items() if s is FingerState.CURLED}
+    others_curled = {"middle", "ring", "pinky"} <= curled
+    if others_curled and index_pointing(lm, cfg, states["index"]):
+        return Pose.POINT
     if len(curled) == 4:
         return Pose.THUMB if thumb_extended(lm, cfg) else Pose.FIST
     if extended == {"index"} and curled == {"middle", "ring", "pinky"}:

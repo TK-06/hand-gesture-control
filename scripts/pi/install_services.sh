@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Start the gesture remote automatically at boot (Raspberry Pi).
 #
-#   sudo scripts/pi/install_services.sh              install + start both services
+#   sudo scripts/pi/install_services.sh              install + start the services
 #   sudo scripts/pi/install_services.sh --uninstall  stop + remove them
 #
-# Installs two systemd services that restart by themselves if they ever stop:
-#   gesturectl-hid  the Bluetooth remote (keeps the phone connected)
-#   gesturectl      the camera + gesture recognition, sends actions to gesturectl-hid
+# Installs systemd services; the first two restart by themselves if they ever stop:
+#   gesturectl-hid   the Bluetooth remote (keeps the phone connected)
+#   gesturectl       the camera + gesture recognition, sends actions to gesturectl-hid
+#   gesturectl-tmux  a shared tmux session for watching commands live (if tmux is installed)
 # Logs: journalctl -u gesturectl -f   and   logs/*.log in the project folder.
 set -euo pipefail
 
@@ -18,10 +19,12 @@ fi
 DIR=$(cd "$(dirname "$0")/../.." && pwd)
 RUN_AS=${SUDO_USER:-$(stat -c %U "$DIR")}
 UNITS=(gesturectl-hid gesturectl)
+command -v tmux >/dev/null && UNITS+=(gesturectl-tmux)
 
 if [[ "${1:-}" == "--uninstall" ]]; then
-    systemctl disable --now "${UNITS[@]/%/.service}" 2>/dev/null || true
-    for unit in "${UNITS[@]}"; do rm -f "/etc/systemd/system/$unit.service"; done
+    ALL=(gesturectl-hid gesturectl gesturectl-tmux)
+    systemctl disable --now "${ALL[@]/%/.service}" 2>/dev/null || true
+    for unit in "${ALL[@]}"; do rm -f "/etc/systemd/system/$unit.service"; done
     systemctl daemon-reload
     echo "removed: the gesture remote no longer starts at boot"
     exit 0
@@ -39,4 +42,4 @@ systemctl daemon-reload
 systemctl enable --now "${UNITS[@]/%/.service}"
 sleep 3
 systemctl --no-pager --lines=0 status "${UNITS[@]/%/.service}" | grep -E "●|Active:"
-echo "done: both start at every boot. Live log: journalctl -u gesturectl -u gesturectl-hid -f"
+echo "done: they start at every boot. Live log: journalctl -u gesturectl -u gesturectl-hid -f"
