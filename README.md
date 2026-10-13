@@ -21,8 +21,8 @@ laptop with a webcam.
 
 ```
 camera ──► MediaPipe Hand Landmarker ──► 21 hand landmarks ──► pose + motion rules ──► gesture ──► action
- (320x240)  (detect once, then track)                          (finger states, circles,          (YAML mapping)
-                                                                swipes, open/close)
+ (320x240)  (detect once, then track)                          (finger states, held          (YAML mapping)
+                                                                poses, circles)
 ```
 
 - **Model.** [MediaPipe Hand Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker)
@@ -35,31 +35,35 @@ camera ──► MediaPipe Hand Landmarker ──► 21 hand landmarks ──►
 
 ## Gestures
 
-Each gesture starts with a short still "arm" pose, so ordinary hand movements (steering,
-gear changes, scratching your face) don't fire it.
+Most gestures are **poses you hold still for about half a second**. At the Pi 4's ~9
+frames per second, held poses are far more reliable than fast motions. The hold also
+means ordinary hand movements (steering, gear changes, scratching your face) don't
+fire anything. Directions are as **you** see them, and everything works with either
+hand (driver's left, passenger's right).
 
 | Gesture | How to do it | Action (default) |
 |---|---|---|
-| `circle_cw` | Point your **index finger only**, draw circles clockwise | `volume_up` |
-| `circle_ccw` | Same, counter-clockwise | `volume_down` |
-| `fist_to_open` | Hold a **fist** still (~0.4 s), then open to **five fingers up** | `pause` |
-| `open_to_fist` | Hold **five fingers up** still (~0.4 s), then close to a **fist** | `play` |
-| `swipe_right` / `swipe_left` | Hold **index + middle finger** (V) still (~0.3 s), then swipe sideways | `next` / `previous` |
-| `swipe_down` / `swipe_up` | Same V pose, swipe down / up | `answer_call` / `end_call` |
+| `open_palm` | **Five fingers up**, held still | `pause` |
+| `thumb_up` | **Thumbs up**, held still | `play` |
+| `thumb_right` / `thumb_left` | Fist with the **thumb pointing to your right / left** | `next` / `previous` |
+| `phone_vertical` | **"Phone" hand** (thumb + pinky out), held **upright** like a phone | `answer_call` |
+| `phone_horizontal` | Same hand held **sideways** (either way round) | `end_call` |
+| `circle_cw` / `circle_ccw` | **Index finger only**, draw circles clockwise / counter-clockwise | `volume_up` / `volume_down` |
 
-How each one works:
+How they work:
 
+- **Held poses** fire once after about 0.6 s held still. Moving the hand restarts the
+  hold, so a hand passing through a pose never fires. To do the same one again, lower
+  your hand (or show something else) first.
 - **Circles:** the first volume step needs one full circle; after that, every half
   circle adds another step while you keep going. Reversing direction restarts the count.
-- **Fist ↔ open:** the change must happen in place. A hand that moves while it closes
-  (for example, dropping onto the gear knob) doesn't count.
-- **Repeating:** after a fist ↔ open or a swipe fires, lower your hand or change pose
-  before doing it again. That's why a pause never chains straight into a play, and why
-  the swipe back to the start never counts as a swipe the other way.
 - **Cooldown:** 1 s after any gesture, other gestures are ignored. Continuous circling is
   the exception.
 - **Remapping:** change the `mapping:` section in `config/default.yaml`. Map a gesture to
-  `null` (or delete its line) to disable it.
+  `null` to disable it. `thumb_down` is available but unused.
+- **Older motion gestures** (two-finger swipes, fist ↔ open) are still in the code but
+  switched off: they were unreliable at the Pi's frame rate. Map them in the config to
+  turn them back on.
 
 ## Quickstart (laptop with a webcam)
 
@@ -130,11 +134,11 @@ scales" (wrist to middle knuckle), so they work at any distance from the camera.
 ## Test with the real camera: videos
 
 With the Pi and camera mounted in the car, record short videos and score them on the
-laptop. The filename is the label, e.g. `swipe_left_driver_day_1.mp4` or
+laptop. The filename is the label, e.g. `thumb_left_driver_day_1.mp4` or
 `none_gearknob_1.mp4`.
 
 ```bash
-python scripts/record_video.py videos/swipe_left_driver_day_1.mp4 --duration 45   # on the Pi
+python scripts/record_video.py videos/thumb_left_driver_day_1.mp4 --duration 45   # on the Pi
 python scripts/evaluate_videos.py --config config/car.yaml --fps 12              # hit rate + false triggers
 ```
 
@@ -174,7 +178,7 @@ src/gesturectl/
   tracker.py            MediaPipe Hand Landmarker (VIDEO mode: detect, then track)
   geometry.py           finger states and poses (open, fist, point, two)
   pose_filter.py        debounce poses, bridge short tracking dropouts
-  gestures/             circle.py, grab.py, swipe.py recognizers
+  gestures/             static.py (held poses), circle.py; grab.py, swipe.py (off by default)
   engine.py             gating (zone, size, confidence), cooldown, mapping
   overlay.py            debug window
   recording.py          sample file format + replay
@@ -211,8 +215,8 @@ videos/                 camera recordings (gitignored, private)
   Run with `--config config/car.yaml`.
   - A camera facing you (laptop, or dash looking at you) needs `flip_horizontal: true`.
   - A roof camera looking down usually needs `false` plus a `rotate` value. With a roof
-    camera, "up" in the image means toward the windscreen, so `swipe_up` / `swipe_down`
-    become forward / backward motions.
+    camera, "up" in the image means toward the windscreen, so "thumb up" and "phone
+    upright" mean pointing forward.
 - **CSI ribbon (Pi 4).** The contacts face the HDMI ports; the blue tab faces the USB
   and Ethernet ports.
 - **Cables.** Route them away from airbag zones and pedals.
@@ -233,7 +237,7 @@ videos/                 camera recordings (gitignored, private)
   written and tested against a stand-in, but has not run on a real Pi yet.
 - **Night driving.** A normal RGB camera can't see a hand in a dark cabin; see the IR
   note above.
-- **Calls.** Bluetooth HID has no "answer call" key. The call swipes are recognized, but
+- **Calls.** Bluetooth HID has no "answer call" key. The call gestures are recognized, but
   may never reach the phone (Stage 5 investigation).
 - **iPhone and play/pause.** iOS may only honour the HID Play/Pause *toggle*. If the
   separate `play` and `pause` keys are ignored, map both grabs to `play_pause`.

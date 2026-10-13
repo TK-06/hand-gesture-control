@@ -43,7 +43,14 @@ POSES = {
     "open_thumb_in": ({"index": _E, "middle": _E, "ring": _E, "pinky": _E}, "tucked"),
     # "finger gun": index + middle held together, thumb sticking out
     "gun": ({"index": _E, "middle": _E, "ring": _C, "pinky": _C}, "extended"),
+    # thumbs up / sideways: fist with the thumb out
+    "thumb": ({"index": _C, "middle": _C, "ring": _C, "pinky": _C}, "extended"),
+    # "phone" / "call me": thumb + pinky out
+    "phone": ({"index": _C, "middle": _C, "ring": _C, "pinky": _E}, "extended"),
 }
+
+THUMB_AXIS = (2, 4)  # thumb MCP -> thumb tip
+PHONE_AXIS = (20, 4)  # pinky tip -> thumb tip
 
 
 def _finger_chain(name: str, flex: str) -> list[np.ndarray]:
@@ -82,6 +89,16 @@ def make_hand(
     lm *= scale
     lm[:, :2] += np.asarray(center, dtype=float) - lm[list(PALM_POINTS), :2].mean(axis=0)
     return lm
+
+
+def aim(pose: str, from_idx: int, to_idx: int, direction_deg: float, *, mirror: bool = False) -> float:
+    """The ``angle_deg`` for make_hand/track that points landmark ``from_idx`` ->
+    ``to_idx`` at ``direction_deg`` (0 = right, 90 = up, 180 = left, -90 = down, as seen
+    on screen). E.g. ``aim("thumb", *THUMB_AXIS, 90)`` makes a thumbs-up."""
+    lm = make_hand(pose, mirror=mirror)
+    v = lm[to_idx, :2] - lm[from_idx, :2]
+    current = math.degrees(math.atan2(-v[1], v[0]))
+    return current - direction_deg  # make_hand's rotation is clockwise on screen
 
 
 # ---------------------------------------------------------------- trajectories
@@ -175,11 +192,22 @@ def track(
     return frames
 
 
-def run(frames: Iterable[tuple[float, HandFrame | None]], cfg: AppConfig | None = None) -> list[str]:
-    """Feed frames through a fresh engine; return the fired gesture names in order."""
+def run(
+    frames: Iterable[tuple[float, HandFrame | None]],
+    cfg: AppConfig | None = None,
+    *,
+    gestures: Iterable[str] | None = None,
+) -> list[str]:
+    """Feed frames through a fresh engine; return the fired gesture names in order.
+    ``gestures`` enables exactly those gestures (e.g. ones switched off by default)."""
+    import dataclasses
+
     from gesturectl.engine import GestureEngine
 
-    engine = GestureEngine(cfg or AppConfig())
+    cfg = cfg or AppConfig()
+    if gestures is not None:
+        cfg = dataclasses.replace(cfg, mapping={g: "test" for g in gestures})
+    engine = GestureEngine(cfg)
     fired: list[str] = []
     for t, hand in frames:
         fired.extend(e.gesture for e in engine.update(t, hand))

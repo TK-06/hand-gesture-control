@@ -2,7 +2,16 @@ import math
 
 import pytest
 
-from synth import line_path, phases, run, track
+from synth import line_path, phases, track
+from synth import run as _run
+
+# These motion gestures are switched off in the default mapping; enable them here.
+FAMILY = ("swipe_up", "swipe_down", "swipe_left", "swipe_right")
+
+
+def run(frames, cfg=None):
+    return _run(frames, cfg, gestures=FAMILY)
+
 
 DIRS = {"right": (1, 0), "left": (-1, 0), "down": (0, 1), "up": (0, -1)}
 

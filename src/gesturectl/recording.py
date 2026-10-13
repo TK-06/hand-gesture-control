@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from gesturectl.config import DEFAULT_MAPPING, GESTURES, PROJECT_ROOT, AppConfig
+from gesturectl.config import GESTURES, PROJECT_ROOT, AppConfig
 from gesturectl.engine import Event, GestureEngine
 from gesturectl.hand import HandFrame
 
@@ -93,10 +93,13 @@ def sample_files(root: Path = SAMPLES_DIR) -> list[Path]:
 
 
 def replay(rec: Recording, cfg: AppConfig) -> list[Event]:
-    """Run a recording through a fresh engine with ``cfg``'s thresholds. Every gesture is
-    enabled during replay, so disabling one in the mapping doesn't break its samples."""
-    cfg = dataclasses.replace(cfg, mapping=dict(DEFAULT_MAPPING))
-    engine = GestureEngine(cfg)
+    """Run a recording through a fresh engine with ``cfg``'s thresholds and live mapping,
+    so what fires is what would fire for real. The recording's own gesture is always
+    enabled, so its samples keep testing it even if it's switched off in the mapping."""
+    mapping = dict(cfg.mapping)
+    if rec.label in GESTURES and not mapping.get(rec.label):
+        mapping[rec.label] = "(replay)"
+    engine = GestureEngine(dataclasses.replace(cfg, mapping=mapping))
     events: list[Event] = []
     for t, hand in rec.frames:
         events.extend(engine.update(t, hand))

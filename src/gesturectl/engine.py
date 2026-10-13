@@ -8,7 +8,14 @@ from dataclasses import dataclass
 
 from gesturectl.config import AppConfig
 from gesturectl.geometry import Pose, classify_pose, hand_scale, palm_center
-from gesturectl.gestures import CircleRecognizer, GrabRecognizer, Observation, Recognizer, SwipeRecognizer
+from gesturectl.gestures import (
+    CircleRecognizer,
+    GrabRecognizer,
+    Observation,
+    Recognizer,
+    StaticPoseRecognizer,
+    SwipeRecognizer,
+)
 from gesturectl.hand import HandFrame
 from gesturectl.pose_filter import PoseFilter
 
@@ -31,6 +38,7 @@ class GestureEngine:
         self.pose_filter = PoseFilter(cfg.gating.pose_switch_s, cfg.gating.dropout_grace_s)
         self.recognizers = recognizers or [
             CircleRecognizer(cfg.gestures.circle),
+            StaticPoseRecognizer(cfg.gestures.static),
             GrabRecognizer(cfg.gestures.grab),
             SwipeRecognizer(cfg.gestures.swipe),
         ]

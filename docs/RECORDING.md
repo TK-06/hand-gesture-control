@@ -33,24 +33,27 @@ then F, then B, C and E.
 
 ### A. Gestures, driver (left hand), daytime: 8 clips, 5 repetitions each
 
+For held poses: show the pose, **hold it still for about 1 second**, lower your hand, rest
+about 3 seconds, repeat.
+
 | File | Do this 5 times | `--duration` |
 |---|---|---|
+| `open_palm_driver_day_1.mp4` | five fingers up, held | 40 |
+| `thumb_up_driver_day_1.mp4` | thumbs up, held | 40 |
+| `thumb_right_driver_day_1.mp4` | fist, thumb pointing to your right, held | 40 |
+| `thumb_left_driver_day_1.mp4` | fist, thumb pointing to your left, held | 40 |
+| `phone_vertical_driver_day_1.mp4` | phone hand (thumb + pinky out) held upright | 40 |
+| `phone_horizontal_driver_day_1.mp4` | phone hand held sideways | 40 |
 | `circle_cw_driver_day_1.mp4` | index finger only, ~1.5 circles clockwise | 45 |
 | `circle_ccw_driver_day_1.mp4` | same, counter-clockwise | 45 |
-| `fist_to_open_driver_day_1.mp4` | hold fist still ~0.5 s, open to five fingers | 40 |
-| `open_to_fist_driver_day_1.mp4` | hold five fingers still ~0.5 s, close to fist | 40 |
-| `swipe_left_driver_day_1.mp4` | hold V (index + middle) still ~0.5 s, swipe left | 40 |
-| `swipe_right_driver_day_1.mp4` | same, swipe right | 40 |
-| `swipe_up_driver_day_1.mp4` | same, swipe up | 40 |
-| `swipe_down_driver_day_1.mp4` | same, swipe down | 40 |
 
-"Left / right / up / down / clockwise" are **as you see it from the driver's seat**.
+"Left / right / up / clockwise" are **as you see it from the driver's seat**.
 
 ### B. Gestures, passenger (right hand), daytime: the same 8, named `..._passenger_day_1.mp4`
 
 ### C. Gestures, driver, at night (dash lights only): the same 8, named `..._driver_night_1.mp4`
 
-### D. Look-alikes, nothing should fire: 8 clips, about 60 s each
+### D. Look-alikes, nothing should fire: 9 clips, about 60 s each
 
 | File | Do this, repeatedly and naturally |
 |---|---|
@@ -58,6 +61,7 @@ then F, then B, C and E.
 | `none_pointing_1.mp4` | point at things, point while talking, move the pointing finger around |
 | `none_openhand_1.mp4` | wave, reach for the sun visor, open hand near the camera |
 | `none_vsign_1.mp4` | V sign, counting 1-2-3 on your fingers, moving them around |
+| `none_thanks_1.mp4` | the quick raised hand / thumbs up you give other drivers, like you normally do it |
 | `none_phone_1.mp4` | pick up the phone, hold it, scroll, put it down |
 | `none_cabin_1.mp4` | drink, use the cup holder, scratch your face, adjust the mirror |
 | `none_controls_1.mp4` | AC / radio knobs, seat belt, fingers tapping in the gesture area |
@@ -70,14 +74,14 @@ then F, then B, C and E.
 
 ### F. Mixed realistic takes: 2–3 takes of 3–5 minutes
 
-`mixed_driver_day_1.mp4`, with `--duration 240`. Move normally (like H, below) and throw
+`mixed_driver_day_1.mp4`, with `--duration 240`. Move normally (like G, below) and throw
 in about 8–10 gestures. Afterwards, create **`videos/mixed_driver_day_1.txt`** next to
 the video, one line per gesture with the approximate time:
 
 ```
-0:12 swipe_right
+0:12 thumb_right
 0:40 circle_cw
-1:05 fist_to_open
+1:05 open_palm
 ```
 
 ±2 seconds is fine. The easiest way: watch the video on the laptop after copying it,

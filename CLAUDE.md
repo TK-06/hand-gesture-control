@@ -18,42 +18,46 @@ the hardware list and mounting notes are in `README.md`; read it first.
   passenger with the right.
 - **Portability:** the same code runs on the laptop and the Pi; board and camera
   differences live in `config/default.yaml`.
-- **Model:** MediaPipe Hand Landmarker (Tasks API, `mediapipe==1.0.1`) in VIDEO mode,
-  one hand, 320x240. Gestures are **rule-based geometry, not a trained model**: there is
-  no training. Videos are for tuning thresholds and as regression tests.
-- **Gesture design** (user's, BMW-inspired; works with either hand):
-  - Index finger only, circling clockwise / counter-clockwise: volume up / down.
-    The first step needs 360°, then one step per 180°.
-  - Fist → five fingers up: `pause`. Five fingers up → fist: `play`.
-    (These are separate actions, not a toggle.)
-  - Index + middle (V) swipe: right `next`, left `previous`, down `answer_call`,
-    up `end_call`.
-- **Safety beats speed.** Every gesture has a still arm pose. Grab transitions must
-  happen in place. Grab and swipe latch until the pose is released. A 1 s global
-  cooldown applies (repeated circling is exempt). Hands that are too small, outside the
-  active zone, or low-confidence are ignored.
+- **Model:** MediaPipe Hand Landmarker (Tasks API) in VIDEO mode, one hand, 320x240.
+  Gestures are **rule-based geometry, not a trained model**: there is no training.
+  Videos are for tuning thresholds and as regression tests.
+- **Gesture design** (user's; works with either hand, directions as the user sees them).
+  On 2026-10-13 the user switched to **static held poses**, because motion gestures
+  were unreliable at the Pi's ~9 fps.
+  - Five fingers up held: `pause` (`open_palm`).
+  - Thumbs up: `play`.
+  - Thumb pointing right / left: `next` / `previous`.
+  - "Phone" hand (thumb + pinky out) held vertical: `answer_call`; held horizontal,
+    either way round: `end_call`.
+  - Index-finger circles clockwise / counter-clockwise: volume up / down (kept; they
+    worked well). The first step needs 360°, then one step per 180°.
+  - `thumb_down` is unmapped. The old swipe and fist↔open gestures are still in the
+    code but switched off (`null`) in the mapping.
+- **Safety beats speed.**
+  - Held poses fire once after `hold_s` (0.6 s) held still; movement restarts the hold.
+  - Then they latch until something else is shown for `release_s`.
+  - A 1 s global cooldown applies (repeated circling is exempt).
+  - Hands that are too small, outside the active zone, or low-confidence are ignored.
 
-## Status (2026-10-10)
+## Status (2026-10-13)
 
 | Stage | Status |
 |---|---|
-| 1 Vision (camera, landmarks, debug overlay) | Done on laptop (~20 FPS, ~10–14 ms inference). picamera2 source written, **untested on the Pi** |
-| 2 Gestures, gating, YAML mapping, sample record/replay | Done; tuned on synthetic hands only |
-| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done and tested on the laptop. **The user is setting up the Pi and recording** |
+| 1 Vision (camera, landmarks) | Done. **Real Pi 4: ~9 FPS, ~110 ms inference**, ribbon camera via picamera2 |
+| 2 Gestures, gating, YAML mapping, sample record/replay | Static poses + circles. Tuned on synthetic hands; the user tested the old motion set live on the Pi (all fired) |
+| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done; no real footage recorded yet |
 | 3 Action layer: `send(action)` with `print` and `bt_hid` backends | Next |
-| 4 BlueZ HID on the Pi, pairing, auto-reconnect (add to `docs/SETUP.md`) | Next; the Pi is here now |
+| 4 BlueZ HID on the Pi, pairing, auto-reconnect (add to `docs/SETUP.md`) | Next |
 | 5 Answering calls | **Investigate and report only**; HID has no answer key |
-| 6 systemd service, rotating log, install script | Later |
+| 6 systemd service (autostart on boot), rotating log, install script | The user asked for autostart 2026-10-13; proposed, not built yet |
 
 Waiting on the user:
 
-- Pi set up per `docs/SETUP.md`, then the first Pi FPS number (step 6).
-- `aim.jpg`, a snapshot from the mounted camera. Use it to set
-  `camera.flip_horizontal` / `rotate` and `gating.active_zone`, probably in a small
-  override YAML.
+- A live test of the static poses (laptop: `python -m gesturectl`; Pi:
+  `--config config/car.yaml`).
 - Videos per `docs/RECORDING.md`, copied into `videos/`. Then run
-  `python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi fps>`, tune `config/default.yaml`, and
-  once clips pass, `--export-samples`.
+  `python scripts/evaluate_videos.py --config config/car.yaml --fps 9`, tune
+  `config/default.yaml`, and once clips pass, `--export-samples`.
 - iPhone model and iOS version, for Stage 4.
 
 ## Commands

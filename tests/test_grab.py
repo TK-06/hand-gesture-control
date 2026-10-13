@@ -2,7 +2,15 @@ import math
 
 import pytest
 
-from synth import line_path, phases, run, track
+from synth import line_path, phases, track
+from synth import run as _run
+
+# These motion gestures are switched off in the default mapping; enable them here.
+FAMILY = ("fist_to_open", "open_to_fist")
+
+
+def run(frames, cfg=None):
+    return _run(frames, cfg, gestures=FAMILY)
 
 
 def grab(start, end, *, hold=0.6, transition=0.15, target_hold=0.5, fps=30, mirror=False, path=None):

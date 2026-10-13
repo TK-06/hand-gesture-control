@@ -25,6 +25,15 @@ DEFAULT_CONFIG = PROJECT_ROOT / "config" / "default.yaml"
 GESTURES = (
     "circle_cw",
     "circle_ccw",
+    # static poses, held still
+    "open_palm",
+    "thumb_up",
+    "thumb_right",
+    "thumb_left",
+    "thumb_down",
+    "phone_vertical",
+    "phone_horizontal",
+    # older motion gestures (off by default)
     "fist_to_open",
     "open_to_fist",
     "swipe_up",
@@ -46,12 +55,19 @@ ACTIONS = (
 DEFAULT_MAPPING: dict[str, str | None] = {
     "circle_cw": "volume_up",
     "circle_ccw": "volume_down",
-    "fist_to_open": "pause",
-    "open_to_fist": "play",
-    "swipe_down": "answer_call",
-    "swipe_up": "end_call",
-    "swipe_right": "next",
-    "swipe_left": "previous",
+    "open_palm": "pause",
+    "thumb_up": "play",
+    "thumb_right": "next",
+    "thumb_left": "previous",
+    "thumb_down": None,
+    "phone_vertical": "answer_call",
+    "phone_horizontal": "end_call",
+    "fist_to_open": None,
+    "open_to_fist": None,
+    "swipe_up": None,
+    "swipe_down": None,
+    "swipe_left": None,
+    "swipe_right": None,
 }
 
 
@@ -133,8 +149,18 @@ class SwipeConfig:
 
 
 @dataclass
+class StaticConfig:
+    hold_s: float = 0.6  # hold the pose this long to fire
+    max_drift: float = 0.3  # hand scales; moving more than this restarts the hold
+    release_s: float = 0.3  # show something else this long before the same pose fires again
+    thumb_tolerance_deg: float = 35.0  # how far off up/right/left/down the thumb may point
+    phone_tolerance_deg: float = 30.0  # how far off vertical/horizontal the phone hand may be
+
+
+@dataclass
 class GesturesConfig:
     circle: CircleConfig = field(default_factory=CircleConfig)
+    static: StaticConfig = field(default_factory=StaticConfig)
     grab: GrabConfig = field(default_factory=GrabConfig)
     swipe: SwipeConfig = field(default_factory=SwipeConfig)
 

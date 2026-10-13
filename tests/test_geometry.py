@@ -4,8 +4,17 @@ import numpy as np
 import pytest
 
 from gesturectl.config import GeometryConfig
-from gesturectl.geometry import FingerState, Pose, classify_pose, finger_states, hand_scale, palm_center
-from synth import make_hand
+from gesturectl.geometry import (
+    FingerState,
+    Pose,
+    classify_pose,
+    finger_states,
+    hand_scale,
+    palm_center,
+    phone_orientation,
+    thumb_direction,
+)
+from synth import PHONE_AXIS, THUMB_AXIS, aim, make_hand
 
 CFG = GeometryConfig()
 
@@ -18,6 +27,8 @@ EXPECTED = {
     "half": Pose.OTHER,
     "open_thumb_in": Pose.OTHER,  # "five fingers up" needs the thumb out too
     "gun": Pose.TWO,  # two fingers + thumb out still counts as the swipe pose
+    "thumb": Pose.THUMB,  # fist with the thumb out
+    "phone": Pose.PHONE,  # thumb + pinky out
 }
 
 
@@ -67,3 +78,24 @@ def test_hand_scale_is_wrist_to_middle_mcp_and_stable_across_poses(pose):
 def test_palm_center_is_where_the_hand_was_placed():
     lm = make_hand("fist", center=(200.0, 90.0), angle_deg=45.0)
     assert palm_center(lm) == pytest.approx([200.0, 90.0])
+
+
+@pytest.mark.parametrize(
+    "deg, expected",
+    [(90, "up"), (0, "right"), (180, "left"), (-90, "down"), (25, "right"), (65, "up"), (45, None), (135, None)],
+)
+@pytest.mark.parametrize("mirror", [False, True])
+def test_thumb_direction_as_seen_by_the_user(deg, expected, mirror):
+    lm = make_hand("thumb", mirror=mirror, angle_deg=aim("thumb", *THUMB_AXIS, deg, mirror=mirror))
+    assert thumb_direction(lm, 35.0) == expected
+
+
+@pytest.mark.parametrize(
+    "deg, expected",
+    [(90, "vertical"), (-90, "vertical"), (70, "vertical"), (0, "horizontal"), (180, "horizontal"),
+     (-20, "horizontal"), (45, None), (-135, None)],
+)
+@pytest.mark.parametrize("mirror", [False, True])
+def test_phone_orientation_ignores_which_end_is_which(deg, expected, mirror):
+    lm = make_hand("phone", mirror=mirror, angle_deg=aim("phone", *PHONE_AXIS, deg, mirror=mirror))
+    assert phone_orientation(lm, 30.0) == expected

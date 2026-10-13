@@ -44,13 +44,19 @@ gestures:
     min_diameter: 0.35    # hand scales
     idle_reset_s: 1.0
     first_step_max_s: 3.0
-  grab:                   # fist <-> five fingers
+  static:                 # poses held still: five fingers, thumb, "phone" hand
+    hold_s: 0.6           # hold the pose this long to fire (once per hold)
+    max_drift: 0.3        # hand scales; moving more than this restarts the hold
+    release_s: 0.3        # show something else this long before the same pose can fire again
+    thumb_tolerance_deg: 35.0   # how far off up/right/left/down the thumb may point
+    phone_tolerance_deg: 30.0   # how far off vertical/horizontal the phone hand may be
+  grab:                   # fist <-> five fingers (older gesture, off in the mapping)
     arm_hold_s: 0.4       # hold the start pose still this long
     arm_max_drift: 0.3    # hand scales
     transition_max_s: 0.8
     transition_max_move: 0.5  # hand scales; the hand must change pose in place
     target_hold_s: 0.2
-  swipe:                  # index + middle finger, swipe
+  swipe:                  # two fingers, swipe (older gesture, off in the mapping)
     arm_hold_s: 0.3
     arm_max_drift: 0.25
     start_distance: 0.25
@@ -65,11 +71,19 @@ overlay:
 # (or mapped to null) is disabled.
 # Actions: volume_up volume_down play pause play_pause next previous answer_call end_call
 mapping:
-  circle_cw: volume_up
-  circle_ccw: volume_down
-  fist_to_open: pause
-  open_to_fist: play
-  swipe_down: answer_call
-  swipe_up: end_call
-  swipe_right: next
-  swipe_left: previous
+  circle_cw: volume_up          # index finger only, circle clockwise
+  circle_ccw: volume_down       # ... counter-clockwise
+  open_palm: pause              # five fingers up, held still
+  thumb_up: play                # thumbs up, held still
+  thumb_right: next             # thumb pointing to your right
+  thumb_left: previous          # thumb pointing to your left
+  thumb_down: null              # available, not used
+  phone_vertical: answer_call   # thumb + pinky out, held upright like a phone
+  phone_horizontal: end_call    # same hand shape, held sideways
+  # Older motion gestures, switched off (unreliable at the Pi's ~9 fps).
+  fist_to_open: null
+  open_to_fist: null
+  swipe_up: null
+  swipe_down: null
+  swipe_left: null
+  swipe_right: null

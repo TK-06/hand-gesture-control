@@ -205,11 +205,14 @@ seconds between each:
 | Hold an open hand still for a few seconds | `hand in N% of frames` goes up |
 | Index finger only, **~1.5 slow circles clockwise** | `ACTION volume_up` |
 | Same, **counter-clockwise** | `ACTION volume_down` |
-| Hold a **fist** still ~½ s, then open to **five fingers** | `ACTION pause` |
-| Hold **five fingers** still ~½ s, then close to a **fist** | `ACTION play` |
-| Hold **two fingers** (finger gun or V) still ~½ s, then **swipe right** / **left** | `ACTION next` / `ACTION previous` |
+| Hold **five fingers up** still ~1 s | `ACTION pause` |
+| Hold a **thumbs up** still ~1 s | `ACTION play` |
+| Fist with the **thumb pointing to your right** / **left**, held ~1 s | `ACTION next` / `ACTION previous` |
+| **Phone hand** (thumb + pinky out) held **upright**, ~1 s | `ACTION answer_call` |
+| Phone hand held **sideways**, ~1 s | `ACTION end_call` |
 
-Directions are as **you** see them.
+Directions are as **you** see them. Each held pose fires once; lower your hand before
+repeating it.
 
 ✅ **Expect:**
 - a line containing `picamera2 camera 0: 320x240`, which means the ribbon camera is in
@@ -239,7 +242,7 @@ See [RECORDING.md](RECORDING.md) for the shot list. Each recording is one comman
 
 **Pi:**
 ```bash
-python scripts/record_video.py videos/swipe_left_driver_day_1.mp4 --duration 45
+python scripts/record_video.py videos/thumb_left_driver_day_1.mp4 --duration 45
 ```
 It counts down 3 seconds, then records. Ctrl+C stops early. Frames are saved raw, so the
 rotation from `car.yaml` is applied later, when evaluating.

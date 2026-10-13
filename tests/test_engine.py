@@ -30,13 +30,13 @@ def scripted_run(script, cfg=None):
 
 
 def test_cooldown_suppresses_a_different_gesture():
-    events = scripted_run({0.0: ["swipe_right"], 0.5: ["swipe_left"], 1.2: ["swipe_up"]})
-    assert [e.gesture for e in events] == ["swipe_right", "swipe_up"]
+    events = scripted_run({0.0: ["thumb_right"], 0.5: ["thumb_left"], 1.2: ["phone_vertical"]})
+    assert [e.gesture for e in events] == ["thumb_right", "phone_vertical"]
 
 
 def test_cooldown_suppresses_repeating_a_one_shot_gesture():
-    events = scripted_run({0.0: ["swipe_right"], 0.5: ["swipe_right"]})
-    assert [e.gesture for e in events] == ["swipe_right"]
+    events = scripted_run({0.0: ["thumb_right"], 0.5: ["thumb_right"]})
+    assert [e.gesture for e in events] == ["thumb_right"]
 
 
 def test_circle_steps_may_repeat_inside_the_cooldown_but_not_switch_direction():
@@ -45,40 +45,49 @@ def test_circle_steps_may_repeat_inside_the_cooldown_but_not_switch_direction():
 
 
 def test_events_carry_the_mapped_action():
-    events = scripted_run({0.0: ["open_to_fist"], 1.5: ["fist_to_open"]})
-    assert [(e.gesture, e.action) for e in events] == [("open_to_fist", "play"), ("fist_to_open", "pause")]
+    script = {0.0: ["thumb_up"], 1.2: ["open_palm"], 2.4: ["phone_horizontal"]}
+    events = scripted_run(script)
+    assert [(e.gesture, e.action) for e in events] == [
+        ("thumb_up", "play"),
+        ("open_palm", "pause"),
+        ("phone_horizontal", "end_call"),
+    ]
+
+
+def test_switched_off_gestures_do_nothing_by_default():
+    events = scripted_run({0.0: ["swipe_right"], 1.2: ["open_to_fist"], 2.4: ["thumb_down"]})
+    assert events == []
 
 
 def test_disabled_gesture_is_dropped_without_starting_a_cooldown():
     cfg = AppConfig()
-    cfg.mapping["swipe_right"] = None
-    events = scripted_run({0.0: ["swipe_right"], 0.3: ["swipe_left"]}, cfg)
-    assert [e.gesture for e in events] == ["swipe_left"]
+    cfg.mapping["thumb_right"] = None
+    events = scripted_run({0.0: ["thumb_right"], 0.3: ["thumb_left"]}, cfg)
+    assert [e.gesture for e in events] == ["thumb_left"]
 
 
-def _grab_frames(**kw):
-    pose_at = phases((0.6, "fist"), (math.inf, "open"))
-    return track(1.3, pose_at, **kw)
+def _open_palm_frames(**kw):
+    return track(1.5, "open", **kw)  # five fingers held still -> open_palm
 
 
 def test_gesture_inside_active_zone_fires():
     cfg = AppConfig()
     cfg.gating = dataclasses.replace(cfg.gating, active_zone=(0.3, 0.3, 0.7, 0.7))
-    assert run(_grab_frames(), cfg) == ["fist_to_open"]
+    assert run(_open_palm_frames(), cfg) == ["open_palm"]
 
 
 def test_hand_outside_active_zone_is_ignored():
     cfg = AppConfig()
     cfg.gating = dataclasses.replace(cfg.gating, active_zone=(0.6, 0.0, 1.0, 1.0))
-    assert run(_grab_frames(), cfg) == []
+    assert run(_open_palm_frames(), cfg) == []
 
 
 def test_far_away_small_hand_is_ignored():
-    assert run(_grab_frames(scale=12.0)) == []
+    assert run(_open_palm_frames(scale=12.0)) == []
 
 
 def test_low_confidence_hand_is_ignored():
-    frames = [(t, dataclasses.replace(h, score=0.3) if h else None) for t, h in _grab_frames()]
+    frames = [(t, dataclasses.replace(h, score=0.3) if h else None) for t, h in _open_palm_frames()]
     assert run(frames) == []
 
 
