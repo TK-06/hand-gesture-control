@@ -17,6 +17,7 @@ EXPECTED = {
     "three": Pose.OTHER,
     "half": Pose.OTHER,
     "open_thumb_in": Pose.OTHER,  # "five fingers up" needs the thumb out too
+    "gun": Pose.TWO,  # two fingers + thumb out still counts as the swipe pose
 }
 
 

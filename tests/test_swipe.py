@@ -46,6 +46,13 @@ def test_diagonal_movement_does_not_fire():
     assert run(track(1.3, "two", path)) == []
 
 
+@pytest.mark.parametrize("direction", ["left", "right"])
+@pytest.mark.parametrize("mirror", [False, True])
+def test_finger_gun_held_upright_swipes_too(direction, mirror):
+    # two fingers together pointing up, thumb out: the user's preferred left/right pose
+    assert run(swipe(direction, pose="gun", mirror=mirror)) == [f"swipe_{direction}"]
+
+
 def test_other_poses_do_not_swipe():
     assert run(swipe("right", pose="open")) == []
     assert run(swipe("right", pose="three")) == []

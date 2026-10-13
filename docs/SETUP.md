@@ -44,7 +44,7 @@ Insert the card, power the Pi, and wait about 2 minutes. Then, from your laptop:
 ssh <user>@gesturepi.local
 sudo apt update && sudo apt full-upgrade -y
 sudo reboot
-sudo apt install -y git python3-venv python3-picamera2 libportaudio2 libgl1
+sudo apt install -y git python3-venv python3-picamera2 libportaudio2 libgl1 libgles2 libegl1
 ```
 
 Why each package:
@@ -54,6 +54,7 @@ Why each package:
 | `python3-picamera2` | The ribbon-camera library. It only installs from apt, not pip. |
 | `libportaudio2` | mediapipe imports an audio library at start-up. |
 | `libgl1` | The OpenCV build that mediapipe requires needs it, even on a headless Pi. |
+| `libgles2`, `libegl1` | mediapipe's engine links against OpenGL ES / EGL even when it only uses the CPU. Lite doesn't include them. |
 
 Check the camera, then take a snapshot so you can see where it's aimed:
 
@@ -78,8 +79,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 python scripts/download_model.py
-python -c "import mediapipe, cv2, picamera2; print('imports ok')"
+python -c "import picamera2; from gesturectl.config import load_config; from gesturectl.tracker import HandTracker; c = load_config(); HandTracker(c.tracker, c.model_path()).close(); print('hand tracker ok')"
 ```
+
+The last line actually starts MediaPipe's hand tracker. A plain `import mediapipe`
+isn't enough: its engine only loads its system libraries when tracking starts.
 
 The first `pip install` takes a few minutes; mediapipe and OpenCV are large.
 
@@ -135,6 +139,7 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS from st
 | `ssh: Could not resolve hostname gesturepi.local` | Wait another minute; check the Wi-Fi details in Imager; or use the Pi's IP address from your router's device list. |
 | `rpicam-hello` lists no cameras | Power off, reseat the ribbon at both ends (contacts toward HDMI on the Pi side). |
 | `ImportError: libGL.so.1` | `sudo apt install -y libgl1` |
+| `OSError: libGLESv2.so.2` or `libEGL.so.1: cannot open shared object file` | `sudo apt install -y libgles2 libegl1` |
 | `ImportError` mentioning `libgthread` / `libglib` | `sudo apt install -y libglib2.0-0t64` (Trixie) or `libglib2.0-0` (Bookworm) |
 | `OSError: PortAudio library not found` | `sudo apt install -y libportaudio2` |
 | `picamera2 is not importable` | `sudo apt install -y python3-picamera2`, and the venv must be created with `--system-site-packages` |

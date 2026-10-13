@@ -41,6 +41,8 @@ POSES = {
     "three": ({"index": _E, "middle": _E, "ring": _E, "pinky": _C}, "tucked"),
     "half": ({"index": _H, "middle": _H, "ring": _H, "pinky": _H}, "half"),
     "open_thumb_in": ({"index": _E, "middle": _E, "ring": _E, "pinky": _E}, "tucked"),
+    # "finger gun": index + middle held together, thumb sticking out
+    "gun": ({"index": _E, "middle": _E, "ring": _C, "pinky": _C}, "extended"),
 }
 
 
