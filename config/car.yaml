@@ -6,5 +6,8 @@
 
 camera:
   rotate: 180   # the camera is mounted upside down
-  # flip_horizontal stays true from default.yaml (camera faces the driver). If a
-  # swipe_right test clip is detected as swipe_left, add  flip_horizontal: false  here.
+  # flip_horizontal stays true from default.yaml (camera faces the driver). If a thumb
+  # pointing to your right is detected as thumb_left, add  flip_horizontal: false  here.
+
+actions:
+  backend: bt_hid   # send gestures to the Bluetooth remote service (python -m gesturectl.hid)

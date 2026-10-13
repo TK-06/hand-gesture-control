@@ -12,8 +12,6 @@ How to read this guide:
   check [Troubleshooting](#troubleshooting) at the bottom.
 - Replace `<user>` with the username you choose in step 1.
 
-Bluetooth (Stage 4) will be added here later.
-
 ---
 
 ## 0. One time only: an SSH key on the laptop (2 min)
@@ -194,8 +192,9 @@ fine).
 ```bash
 python -m gesturectl --config config/car.yaml --no-window --duration 60
 ```
-`config/car.yaml` holds the car settings, layered on `config/default.yaml`; for now it
-just rotates the upside-down camera.
+`config/car.yaml` holds the car settings, layered on `config/default.yaml`: it rotates
+the upside-down camera and sends actions to the Bluetooth remote (step 7). Until that
+runs, the log says the remote isn't reachable; that's expected.
 
 While it runs, hold your hand **30–60 cm** from the camera and do these, pausing a few
 seconds between each:
@@ -203,11 +202,11 @@ seconds between each:
 | Do this | ✅ Look for |
 |---|---|
 | Hold an open hand still for a few seconds | `hand in N% of frames` goes up |
-| Index finger only, **~1.5 slow circles clockwise** | `ACTION volume_up` |
+| Index finger only, **slow circles clockwise** (first step after ¾ of a circle) | `ACTION volume_up` |
 | Same, **counter-clockwise** | `ACTION volume_down` |
 | Hold **five fingers up** still ~1 s | `ACTION pause` |
 | Hold a **thumbs up** still ~1 s | `ACTION play` |
-| Fist with the **thumb pointing to your right** / **left**, held ~1 s | `ACTION next` / `ACTION previous` |
+| Fist with the **thumb pointing to your right** / **left**, held ~1 s | `ACTION next` / `ACTION previous` (keep holding: again every 2 s) |
 | **Phone hand** (thumb + pinky out) held **upright**, ~1 s | `ACTION answer_call` |
 | Phone hand held **sideways**, ~1 s | `ACTION end_call` |
 
@@ -225,27 +224,145 @@ get tuned on your real videos next.
 
 ---
 
-## 7. Everyday use
+## 7. Bluetooth: set up and pair your iPhone (~10 min)
 
-| What | Command |
-|---|---|
-| Log in | **Laptop:** `ssh <user>@gesturepi.local` |
-| Start of every session | **Pi:** `cd ~/hand-gesture-control && source .venv/bin/activate` |
-| Get the latest code (after a push from the laptop) | **Pi:** `git pull` |
-| Shut down: **always** before unplugging, to protect the SD card | **Pi:** `sudo poweroff`, then wait for the green light to stop blinking |
+The Pi becomes a **Bluetooth LE media remote** called "Gesture Remote". It only sends
+media keys (volume, play, pause, next, previous). Your phone keeps playing through the
+car stereo as usual.
+
+**One-time Bluetooth setup. Pi:**
+```bash
+cd ~/hand-gesture-control && source .venv/bin/activate
+pip install -r requirements.txt                 # adds dbus-fast (talks to BlueZ)
+sudo scripts/pi/setup_bluetooth.sh
+```
+✅ **Expect:** `done: Bluetooth LE only, input plugin off`.
+
+What the setup script changes, and why:
+- **bluetoothd without its "input" plugin, and the controller in Bluetooth LE-only
+  mode.** Otherwise iPhones try to connect the old (Classic) way and the remote
+  doesn't work. The Pi doesn't need Classic Bluetooth for anything here.
+- **`JustWorksRepairing = always`**, so a phone that did "Forget This Device" can pair
+  again.
+
+`sudo scripts/pi/setup_bluetooth.sh --undo` puts it all back.
+
+**Start the remote.** Step 8 makes this automatic; to try it by hand first. **Pi:**
+```bash
+python -m gesturectl.hid --config config/car.yaml serve
+```
+✅ **Expect:** `no phone paired yet: pairing is open until one pairs` and
+`advertising as 'Gesture Remote'`.
+
+**Pair.**
+1. **iPhone:** Settings → Bluetooth.
+2. Tap **Gesture Remote** (under Other Devices), then **Pair**.
+
+✅ **Expect:** it moves to My Devices as **Connected**, and the Pi logs
+`phone subscribed to media keys` and then `pairing window closed`.
+
+**Test each key** from a second SSH window while music plays on the phone. **Pi:**
+```bash
+python -m gesturectl.hid status                 # connected: iPhone; ...; keys ready: yes
+python -m gesturectl.hid send volume_up         # also: volume_down pause play next previous play_pause
+```
+Each command prints `ok` when the key was sent.
+
+**Security: only one pairing window.** Once a phone is paired, the remote refuses *new*
+phones, so nobody in the next car can pair with it. To add another phone (for example
+a passenger's), open a 2-minute window first:
+```bash
+python -m gesturectl.hid pair
+```
+
+**Tested on an iPhone 15 with iOS 26.6.1:**
+- volume up/down, play, pause, play/pause, next and previous all work;
+- volume keys need a ~150 ms key press (iOS ignores shorter taps), which is the
+  default.
+
+Calls can't be answered this way: phones only take call controls over the hands-free
+connection, which this remote deliberately doesn't use. The phone gestures are
+recognized but do nothing yet.
 
 ---
 
-## 8. Recording test videos
-
-See [RECORDING.md](RECORDING.md) for the shot list. Each recording is one command:
+## 8. Start automatically at boot
 
 **Pi:**
 ```bash
-python scripts/record_video.py videos/thumb_left_driver_day_1.mp4 --duration 45
+cd ~/hand-gesture-control
+sudo scripts/pi/install_services.sh
 ```
-It counts down 3 seconds, then records. Ctrl+C stops early. Frames are saved raw, so the
-rotation from `car.yaml` is applied later, when evaluating.
+This installs two services that start at every boot and restart by themselves if they
+ever stop:
+
+| Service | What it does |
+|---|---|
+| `gesturectl-hid` | the Bluetooth remote; keeps the phone connected |
+| `gesturectl` | camera + gesture recognition; sends actions to `gesturectl-hid` |
+
+✅ **Expect:** both `Active: active (running)`.
+
+From then on there's nothing to type. Power on the Pi; about 30–60 s later your iPhone
+reconnects by itself (with Bluetooth on) and gestures work.
+
+**Staying connected:**
+- The remote keeps Bluetooth powered and keeps advertising whenever no phone is
+  connected, so the iPhone can always find it again.
+- If the phone ends up connected but not listening for keys (for example after the
+  remote restarts while the phone stays connected), the remote drops the link on
+  purpose. The iPhone reconnects within a few seconds.
+
+`sudo scripts/pi/install_services.sh --uninstall` stops and removes both services.
+
+---
+
+## 9. Everyday use
+
+| What | Command (**Pi**, unless noted) |
+|---|---|
+| Log in | **Laptop:** `ssh <user>@gesturepi.local` |
+| Start of every session | `cd ~/hand-gesture-control && source .venv/bin/activate` |
+| Is the phone connected? | `python -m gesturectl.hid status` |
+| Services running? | `systemctl status gesturectl gesturectl-hid` |
+| Stop / start gestures (e.g. to record videos) | `sudo systemctl stop gesturectl` / `sudo systemctl start gesturectl` |
+| Pair another phone | `python -m gesturectl.hid pair` |
+| Get the latest code (after a push from the laptop) | `git pull && pip install -r requirements.txt && sudo systemctl restart gesturectl-hid gesturectl` |
+| Shut down: **always** before unplugging at your desk | `sudo poweroff`, then wait for the green light to stop blinking |
+
+---
+
+## 10. Watch it live
+
+**Logs as they happen.** **Pi:**
+```bash
+journalctl -u gesturectl -u gesturectl-hid -f      # Ctrl+C to stop watching
+```
+The same logs are also saved, rotating at 1 MB × 5, in `~/hand-gesture-control/logs/`
+(`gesturectl.log`, `hid.log`). That's how you see afterwards what happened on a drive.
+
+**Watch what Claude runs on the Pi.** Claude runs long commands inside a shared terminal
+session called `gesturectl`. To watch it read-only, so you can't type into it by
+accident. **Laptop (PowerShell):**
+```powershell
+ssh -t <user>@gesturepi.local tmux attach -r -t gesturectl
+```
+Leave it with **Ctrl+B**, then **D**. The session keeps running.
+
+---
+
+## 11. Recording test videos
+
+See [RECORDING.md](RECORDING.md) for the shot list. The camera can only be used by one
+program at a time, so **stop the gesture service first** and start it again afterwards.
+**Pi:**
+```bash
+sudo systemctl stop gesturectl
+python scripts/record_video.py videos/thumb_left_driver_day_1.mp4 --duration 45
+sudo systemctl start gesturectl
+```
+`record_video.py` counts down 3 seconds, then records. Ctrl+C stops early. Frames are
+saved raw, so the rotation from `car.yaml` is applied later, when evaluating.
 
 **In the car** there's no home Wi-Fi:
 1. Turn on your iPhone's **Personal Hotspot**.
@@ -259,7 +376,7 @@ dropped frames: **Pi:** `vcgencmd get_throttled` should print `throttled=0x0`.
 
 ---
 
-## 9. Copy videos to the laptop and evaluate
+## 12. Copy videos to the laptop and evaluate
 
 **Laptop (PowerShell)**, inside the project folder:
 ```powershell
@@ -290,3 +407,10 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps <your FPS from 
 | `picamera2 is not importable` | `sudo apt install -y python3-picamera2`, and the venv must be created with `--system-site-packages` |
 | numpy errors when importing picamera2 | numpy 2 ended up in the venv: `pip install "numpy==1.26.4"` |
 | Low FPS / `throttled=0x5...` | Power supply too weak, or the Pi is hot. Use a 3 A supply and a heatsink case. |
+| "Gesture Remote" doesn't appear on the iPhone | Is the remote running (`python -m gesturectl.hid status`)? Once a phone is paired, new phones only see it during `python -m gesturectl.hid pair`. |
+| Log says `Bluetooth remote service not reachable` | `gesturectl-hid` isn't running: `sudo systemctl start gesturectl-hid`, then check `journalctl -u gesturectl-hid`. |
+| `error: phone not connected` | iPhone Bluetooth is off, or the phone is out of range. It reconnects by itself when back. |
+| `error: phone connected but not listening for keys yet` | Wait ~20 s: the remote reconnects the phone automatically. |
+| Keys arrive but volume doesn't change | Check `hid.key_press_s` is 0.15 (iOS ignores shorter volume taps). |
+| After "Forget This Device" the iPhone can't pair again | `python -m gesturectl.hid pair`, then pair within 2 minutes. |
+| Camera busy / `record_video.py` can't open the camera | The gesture service has it: `sudo systemctl stop gesturectl` first. |

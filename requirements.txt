@@ -17,3 +17,6 @@ opencv-contrib-python==4.11.0.86 ; platform_machine == "aarch64"
 numpy==1.26.4 ; platform_machine == "aarch64"
 
 PyYAML==6.0.3
+
+# --- Linux only: talks to BlueZ for the Bluetooth remote (python -m gesturectl.hid).
+dbus-fast==5.2.0 ; sys_platform == "linux"

@@ -9,9 +9,12 @@ Target hardware is a headless Raspberry Pi 4 (2 GB) that pairs with the phone as
 audio is never pulled away from the car. Development and testing happen on a normal
 laptop with a webcam.
 
-> **Status:** Stages 1–2 are done: vision and gesture recognition, running on a laptop.
-> Gestures are detected and printed; sending them to a phone (Bluetooth) is the next
-> milestone. See the [Roadmap](#roadmap).
+> **Status:** working end to end on a Raspberry Pi 4 with an iPhone 15 (iOS 26.6.1).
+> - Gestures are recognized at ~9 FPS, and the Pi sends the media keys over Bluetooth LE
+>   as a paired "Gesture Remote".
+> - It can start by itself at boot, with no SSH needed.
+>
+> Still to do: tuning on real in-car footage, and calls. See the [Roadmap](#roadmap).
 
 > **Safety:** a hobby project, not a certified automotive product. It is meant to
 > *reduce* reaching for the phone while driving. Keep your eyes on the road and use it at
@@ -22,7 +25,9 @@ laptop with a webcam.
 ```
 camera ──► MediaPipe Hand Landmarker ──► 21 hand landmarks ──► pose + motion rules ──► gesture ──► action
  (320x240)  (detect once, then track)                          (finger states, held          (YAML mapping)
-                                                                poses, circles)
+                                                                poses, circles)                  │
+                                                                                                 ▼
+                     iPhone ◄── Bluetooth LE media key ◄── Bluetooth remote service (gesturectl-hid)
 ```
 
 - **Model.** [MediaPipe Hand Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker)
@@ -32,6 +37,9 @@ camera ──► MediaPipe Hand Landmarker ──► 21 hand landmarks ──►
   model training is needed; thresholds are tuned with your own recorded samples.
 - **Either hand.** Every rule is independent of left/right hand, rotation and distance,
   so the driver and the passenger can both use it.
+- **Bluetooth remote.** A second program on the Pi is a Bluetooth LE "HID" media remote
+  (like a steering-wheel media button). The phone pairs with it once and reconnects
+  automatically. It only sends media keys; phone audio keeps going to the car stereo.
 
 ## Gestures
 
@@ -45,7 +53,7 @@ hand (driver's left, passenger's right).
 |---|---|---|
 | `open_palm` | **Five fingers up**, held still | `pause` |
 | `thumb_up` | **Thumbs up**, held still | `play` |
-| `thumb_right` / `thumb_left` | Fist with the **thumb pointing to your right / left** | `next` / `previous` |
+| `thumb_right` / `thumb_left` | Fist with the **thumb pointing to your right / left**; keep holding to skip again every 2 s | `next` / `previous` |
 | `phone_vertical` | **"Phone" hand** (thumb + pinky out), held **upright** like a phone | `answer_call` |
 | `phone_horizontal` | Same hand held **sideways** (either way round) | `end_call` |
 | `circle_cw` / `circle_ccw` | **Index finger only**, draw circles clockwise / counter-clockwise | `volume_up` / `volume_down` |
@@ -55,8 +63,9 @@ How they work:
 - **Held poses** fire once after about 0.6 s held still. Moving the hand restarts the
   hold, so a hand passing through a pose never fires. To do the same one again, lower
   your hand (or show something else) first.
-- **Circles:** the first volume step needs one full circle; after that, every half
-  circle adds another step while you keep going. Reversing direction restarts the count.
+- **Circles:** the first volume step needs ¾ of a circle; after that, every half circle
+  adds another step while you keep going. Reversing direction restarts the count.
+- **Repeat:** next / previous fire again every 2 s while you keep holding the thumb out.
 - **Cooldown:** 1 s after any gesture, other gestures are ignored. Continuous circling is
   the exception.
 - **Remapping:** change the `mapping:` section in `config/default.yaml`. Map a gesture to
@@ -158,13 +167,13 @@ Guides:
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Vision: camera, hand landmarks, debug overlay | ✅ done (laptop); Pi camera support written, untested on hardware |
-| 2 | Gesture recognition, safety gating, YAML mapping, sample recording | ✅ done (laptop) |
-| 2b | Real-camera video recording + scoring, tuning on in-car footage | tools done; recording in progress |
-| 3 | Action layer with pluggable backends (`print`, `bt_hid`) | next |
-| 4 | Bluetooth HID consumer-control device on the Pi (BlueZ): pairing, auto-reconnect | next |
-| 5 | Answering calls: investigation only (HID has no "answer" key) | later |
-| 6 | Deployment: systemd service, rotating logs, install script | later |
+| 1 | Vision: camera, hand landmarks, debug overlay | ✅ done: laptop + Pi 4 ribbon camera (~9 FPS) |
+| 2 | Gestures (held poses + circles), safety gating, YAML mapping, sample recording | ✅ done; tested live on the Pi |
+| 2b | Real-camera video recording + scoring, tuning on in-car footage | tools done; in-car footage still to record |
+| 3 | Action layer with pluggable backends (`print`, `bt_hid`) | ✅ done |
+| 4 | Bluetooth LE HID media remote on the Pi (BlueZ): pairing, auto-reconnect, self-healing | ✅ done; tested with an iPhone 15 / iOS 26.6.1 |
+| 5 | Answering calls: investigation only (a media remote has no "answer" key) | later |
+| 6 | Deployment: systemd services (autostart, restart on failure), rotating logs, install script | ✅ done; read-only filesystem for power cuts still to do |
 
 ## Project layout
 
@@ -173,6 +182,7 @@ config/default.yaml     all settings + gesture -> action mapping
 docs/                   SETUP.md (Raspberry Pi), RECORDING.md (shot list)
 scripts/                download_model.py, record_samples.py, replay_samples.py,
                         record_video.py, evaluate_videos.py
+scripts/pi/             setup_bluetooth.sh, install_services.sh, systemd unit templates
 src/gesturectl/
   camera.py             OpenCV or Pi ribbon camera (picamera2), flip/rotate, fit to 320x240
   tracker.py            MediaPipe Hand Landmarker (VIDEO mode: detect, then track)
@@ -181,6 +191,9 @@ src/gesturectl/
   gestures/             static.py (held poses), circle.py; grab.py, swipe.py (off by default)
   engine.py             gating (zone, size, confidence), cooldown, mapping
   overlay.py            debug window
+  actions.py            where actions go: print (laptop) or bt_hid (Bluetooth remote)
+  hid/                  the Bluetooth LE media remote (python -m gesturectl.hid)
+  logsetup.py           console + rotating log file
   recording.py          sample file format + replay
   video.py              video recording, labels from filenames, video -> landmarks (cached)
   evaluation.py         scoring detections against what was performed
@@ -221,26 +234,26 @@ videos/                 camera recordings (gitignored, private)
   and Ethernet ports.
 - **Cables.** Route them away from airbag zones and pedals.
 - **Power cuts.** Car USB power cuts out with the ignition, which can corrupt the SD
-  card. Stage 6 will cover this (e.g. a read-only root filesystem).
+  card. Still to do: a read-only root filesystem (raspi-config overlay).
 
 ## Known limitations / not yet verified
 
-- **Pi 4 performance.** Reported at about 14 FPS for one hand with older MediaPipe;
-  not measured with this code. All gesture timing is in seconds, not frames, so it
-  should behave the same at about 10 FPS. Tests replay gestures at both 10 and 30 FPS.
+- **Pi 4 performance.** Measured ~9 FPS with ~110 ms inference per frame. All gesture
+  timing is in seconds, not frames, so it behaves the same as on the laptop.
 - **mediapipe on the Pi 4.** MediaPipe 1.x for ARM needs AES CPU instructions the Pi 4
   lacks, so it crashes there. The Pi uses **mediapipe 0.10.18 on Raspberry Pi OS
   Bookworm (Python 3.11)**; `requirements.txt` selects it automatically on ARM Linux.
   The laptop keeps 1.0.1. Both versions give identical landmarks on a test photo, and
   the full test suite passes on both. See [docs/SETUP.md](docs/SETUP.md).
-- **Pi ribbon camera.** `camera.source: picamera2` (picked automatically by `auto`) is
-  written and tested against a stand-in, but has not run on a real Pi yet.
 - **Night driving.** A normal RGB camera can't see a hand in a dark cabin; see the IR
   note above.
-- **Calls.** Bluetooth HID has no "answer call" key. The call gestures are recognized, but
-  may never reach the phone (Stage 5 investigation).
-- **iPhone and play/pause.** iOS may only honour the HID Play/Pause *toggle*. If the
-  separate `play` and `pause` keys are ignored, map both grabs to `play_pause`.
+- **Calls.** Phones only take call controls over the hands-free connection, which this
+  remote deliberately doesn't use (that would pull call audio away from the car). The
+  call gestures are recognized but do nothing yet (Stage 5 investigation).
+- **iPhone specifics (iOS 26.6.1).**
+  - The separate play and pause keys work, as do next, previous and play/pause.
+  - Volume keys need a ~150 ms key press; iOS ignores shorter taps.
+  - Not yet checked: whether the on-screen keyboard stays available while connected.
 - **Open palm direction.** "Five fingers up" checks finger extension only, not which
   way the palm faces.
 

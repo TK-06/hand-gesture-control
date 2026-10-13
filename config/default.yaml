@@ -38,7 +38,7 @@ gestures:
   circle:                 # index finger only, draw circles
     min_step: 0.12        # hand scales; fingertip moves smaller than this are ignored
     max_turn_deg: 135.0
-    first_step_deg: 360.0 # first volume step after one full circle...
+    first_step_deg: 270.0 # first volume step after 3/4 of a circle...
     step_deg: 180.0       # ...then one more step every half circle
     reverse_reset_deg: 90.0
     min_diameter: 0.35    # hand scales
@@ -50,6 +50,8 @@ gestures:
     release_s: 0.3        # show something else this long before the same pose can fire again
     thumb_tolerance_deg: 35.0   # how far off up/right/left/down the thumb may point
     phone_tolerance_deg: 30.0   # how far off vertical/horizontal the phone hand may be
+    repeat_s: 2.0               # keep holding next/previous: skip again every 2 s (0 = off)
+    repeat_gestures: [thumb_right, thumb_left]
   grab:                   # fist <-> five fingers (older gesture, off in the mapping)
     arm_hold_s: 0.4       # hold the start pose still this long
     arm_max_drift: 0.3    # hand scales
@@ -66,6 +68,18 @@ gestures:
 
 overlay:
   scale: 2.0              # debug window upscale
+
+actions:
+  backend: print          # print = just log actions (laptop) | bt_hid = send to the Bluetooth remote (Pi)
+
+hid:                      # the Bluetooth LE remote service: python -m gesturectl.hid
+  name: Gesture Remote    # shown in the iPhone's Bluetooth list
+  adapter: hci0
+  profile: media          # media | media+keyboard (fallback if iOS ignores a media-only remote)
+  host: 127.0.0.1         # where the service listens for actions (local only)
+  port: 47231
+  pairing_window_s: 120.0 # how long `pair` accepts a new phone
+  key_press_s: 0.15       # key down -> key up; iOS ignored volume keys at 0.03 (tested, iPhone 15 / iOS 26.6.1)
 
 # gesture -> action. This list replaces the built-in mapping: a gesture left out
 # (or mapped to null) is disabled.

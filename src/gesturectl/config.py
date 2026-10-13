@@ -121,7 +121,7 @@ class GatingConfig:
 class CircleConfig:
     min_step: float = 0.12  # fingertip path resampling distance (hand scales); filters jitter
     max_turn_deg: float = 135.0  # larger turns between segments are treated as noise
-    first_step_deg: float = 360.0
+    first_step_deg: float = 270.0  # first volume step after 3/4 of a circle
     step_deg: float = 180.0
     reverse_reset_deg: float = 90.0
     min_diameter: float = 0.35  # hand scales
@@ -155,6 +155,8 @@ class StaticConfig:
     release_s: float = 0.3  # show something else this long before the same pose fires again
     thumb_tolerance_deg: float = 35.0  # how far off up/right/left/down the thumb may point
     phone_tolerance_deg: float = 30.0  # how far off vertical/horizontal the phone hand may be
+    repeat_s: float = 2.0  # keep holding a repeating pose: fire again every repeat_s (0 = off)
+    repeat_gestures: list[str] = field(default_factory=lambda: ["thumb_right", "thumb_left"])
 
 
 @dataclass
@@ -171,6 +173,24 @@ class OverlayConfig:
 
 
 @dataclass
+class ActionsConfig:
+    backend: str = "print"  # print (log only) | bt_hid (send to the Bluetooth remote service)
+
+
+@dataclass
+class HidConfig:
+    """The Bluetooth LE remote service (python -m gesturectl.hid)."""
+
+    name: str = "Gesture Remote"  # shown in the iPhone's Bluetooth list
+    adapter: str = "hci0"
+    profile: str = "media"  # media | media+keyboard (fallback if iOS ignores a media-only remote)
+    host: str = "127.0.0.1"  # where the service listens for actions (local only)
+    port: int = 47231
+    pairing_window_s: float = 120.0  # how long `pair` accepts a new phone
+    key_press_s: float = 0.15  # key down -> key up; iOS ignores volume taps much shorter than this
+
+
+@dataclass
 class AppConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
@@ -178,6 +198,8 @@ class AppConfig:
     gating: GatingConfig = field(default_factory=GatingConfig)
     gestures: GesturesConfig = field(default_factory=GesturesConfig)
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
+    actions: ActionsConfig = field(default_factory=ActionsConfig)
+    hid: HidConfig = field(default_factory=HidConfig)
     mapping: dict[str, str | None] = field(default_factory=lambda: dict(DEFAULT_MAPPING))
 
     def model_path(self) -> Path:
@@ -243,6 +265,17 @@ def validate(cfg: AppConfig) -> None:
     if cam.width <= 0 or cam.height <= 0 or cam.fps <= 0:
         raise ConfigError("camera.width/height/fps must be positive")
 
+    if cfg.actions.backend not in ("print", "bt_hid"):
+        raise ConfigError(f"actions.backend: expected 'print' or 'bt_hid', got {cfg.actions.backend!r}")
+    if cfg.hid.profile not in ("media", "media+keyboard"):
+        raise ConfigError(f"hid.profile: expected 'media' or 'media+keyboard', got {cfg.hid.profile!r}")
+    if not 1 <= cfg.hid.port <= 65535:
+        raise ConfigError(f"hid.port: must be 1..65535, got {cfg.hid.port}")
+
+    for gesture in cfg.gestures.static.repeat_gestures:
+        if gesture not in GESTURES:
+            raise ConfigError(f"gestures.static.repeat_gestures: unknown gesture {gesture!r}")
+
     if cfg.tracker.num_hands < 1:
         raise ConfigError("tracker.num_hands must be >= 1")
 
@@ -269,6 +302,11 @@ def _coerce(hint: Any, value: Any, where: str) -> Any:
     if dataclasses.is_dataclass(hint):
         return _build(hint, value, where)
     origin = typing.get_origin(hint)
+    if origin is list:
+        if not isinstance(value, list):
+            raise ConfigError(f"{where}: expected a list")
+        (item,) = typing.get_args(hint)
+        return [_coerce(item, v, f"{where}[{i}]") for i, v in enumerate(value)]
     if origin is tuple:
         if not isinstance(value, (list, tuple)):
             raise ConfigError(f"{where}: expected a list")

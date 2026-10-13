@@ -86,3 +86,19 @@ def test_switching_pose_fires_the_new_one_after_its_own_hold():
 def test_other_poses_held_still_fire_nothing(pose):
     # e.g. a fist gripping the gear knob
     assert run(held(pose, seconds=3.0)) == []
+
+
+@pytest.mark.parametrize("deg, gesture", [(0, "thumb_right"), (180, "thumb_left")])
+def test_holding_next_or_previous_repeats_every_2_s(deg, gesture):
+    # fires at ~0.7 s, then again at ~2.7 s and ~4.7 s while still held
+    assert run(held("thumb", seconds=5.0, deg=deg, axis=THUMB_AXIS)) == [gesture] * 3
+
+
+def test_play_does_not_repeat_while_held():
+    assert run(held("thumb", seconds=5.0, deg=90, axis=THUMB_AXIS)) == ["thumb_up"]
+
+
+def test_repeat_needs_the_hand_held_still():
+    # thumb right, but the hand drifts the whole time after the first skip
+    drift = line_path((60.0, 120.0), (300.0, 120.0), 1.0, 5.0)  # ~1 hand length/s until the end
+    assert run(held("thumb", seconds=5.0, deg=0, axis=THUMB_AXIS, path=drift)) == ["thumb_right"]

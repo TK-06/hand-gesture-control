@@ -1,18 +1,22 @@
 """Run the gesture controller: ``python -m gesturectl [--config PATH] [--no-window]``.
 
-Stage 1-2: recognized gestures are printed (and shown in the debug window). Sending
-them to the phone comes with the action backends in Stage 3-4.
+Recognized gestures are logged, shown in the debug window, and handed to the action
+backend from the config: ``print`` (laptop) or ``bt_hid`` (the Bluetooth remote service
+that presses media keys on the phone; used by config/car.yaml).
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
 import time
 
+from gesturectl.actions import make_backend
 from gesturectl.app import Pipeline
 from gesturectl.config import load_config
+from gesturectl.logsetup import setup_logging
 
 log = logging.getLogger("gesturectl")
 
@@ -27,16 +31,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-window", action="store_true", help="headless: no debug window")
     parser.add_argument("--duration", type=float, help="stop after this many seconds")
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument("--log-file", help="also write a rotating log file (1 MB x 5), e.g. logs/gesturectl.log")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    setup_logging(args.log_level, args.log_file)
+    signal.signal(signal.SIGTERM, _stop_on_sigterm)  # systemd stop: shut down cleanly
     cfg = load_config(args.config)
+    backend = make_backend(cfg)
     try:
         pipeline = Pipeline(cfg)
     except (RuntimeError, FileNotFoundError, NotImplementedError) as exc:
         log.error("%s", exc)
         return 2
-    log.info("%s -> processing %dx%d", pipeline.camera.describe(), cfg.camera.width, cfg.camera.height)
+    log.info(
+        "%s -> processing %dx%d; actions -> %s", pipeline.camera.describe(), cfg.camera.width, cfg.camera.height,
+        cfg.actions.backend,
+    )
 
     window = not args.no_window
     if window:
@@ -64,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
 
             for event in result.events:
                 log.info("ACTION %-12s (gesture %s)", event.action, event.gesture)
+                backend.send(event.action)
                 banner, banner_until = f"{event.action}  ({event.gesture})", result.t + BANNER_S
 
             if result.t >= next_stats:
@@ -96,10 +107,15 @@ def main(argv: list[str] | None = None) -> int:
         pass
     finally:
         pipeline.close()
+        backend.close()
         if window:
             cv2.destroyAllWindows()
     log.info("stopped after %d frames", frames)
     return 0
+
+
+def _stop_on_sigterm(signum, frame) -> None:
+    raise KeyboardInterrupt
 
 
 if __name__ == "__main__":

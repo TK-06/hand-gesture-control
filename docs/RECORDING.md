@@ -23,8 +23,13 @@ Videos stay in `videos/` (gitignored, never pushed).
   and the **passenger uses the right hand**.
 - **The filename is the label.** Use the names below. `_x3` means "I did it 3 times"
   (default 5).
+- **Free the camera first.** The camera can only be used by one program at a time:
+  `sudo systemctl stop gesturectl` before recording, and
+  `sudo systemctl start gesturectl` when you're done.
 - **One command per clip**, after `cd ~/hand-gesture-control && source .venv/bin/activate`:
   `python scripts/record_video.py videos/<name>.mp4 --duration <seconds>`
+- **Next / previous repeat** every 2 s while held. For those clips, hold about 1 s, not
+  longer, so each repetition counts once.
 
 ## Shot list
 
@@ -98,7 +103,7 @@ Leave it running while you drive normally. It saves a new file every 5 minutes
 
 ## Check your recordings
 
-After copying `videos/` to the laptop (see [SETUP.md](SETUP.md) step 9):
+After copying `videos/` to the laptop (see [SETUP.md](SETUP.md) step 12):
 
 ```powershell
 python scripts/evaluate_videos.py --config config/car.yaml --fps <Pi FPS>              # per-clip result + summary

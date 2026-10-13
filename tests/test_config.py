@@ -112,8 +112,24 @@ def test_loading_default_explicitly_is_the_same_as_no_path():
     assert load_config(DEFAULT_CONFIG) == load_config()
 
 
-def test_car_yaml_only_changes_the_camera_rotation():
+def test_car_yaml_rotates_the_camera_and_sends_to_bluetooth_only():
     car = load_config(PROJECT_ROOT / "config" / "car.yaml")
     default = load_config()
     assert car.camera.rotate == 180
-    assert dataclasses.replace(car, camera=dataclasses.replace(car.camera, rotate=0)) == default
+    assert car.actions.backend == "bt_hid"
+    restored = dataclasses.replace(
+        car,
+        camera=dataclasses.replace(car.camera, rotate=0),
+        actions=dataclasses.replace(car.actions, backend="print"),
+    )
+    assert restored == default
+
+
+def test_repeat_gestures_must_be_known():
+    with pytest.raises(ConfigError, match="repeat_gestures"):
+        from_dict({"gestures": {"static": {"repeat_gestures": ["thumb_sideways"]}}})
+
+
+def test_repeat_gestures_list_is_loaded():
+    cfg = from_dict({"gestures": {"static": {"repeat_gestures": ["thumb_up"], "repeat_s": 1.5}}})
+    assert cfg.gestures.static.repeat_gestures == ["thumb_up"] and cfg.gestures.static.repeat_s == 1.5

@@ -9,7 +9,7 @@ the hardware list and mounting notes are in `README.md`; read it first.
 - **Bluetooth HID only.** The Pi is a Bluetooth **HID consumer-control device**
   (media keys) paired to the phone. It is NOT an A2DP sink, because that would pull
   phone audio away from the car stereo.
-- **Phone:** iPhone.
+- **Phone:** iPhone 15, iOS 26.6.1.
 - **Target hardware:** Raspberry Pi 4 **2 GB**, Raspberry Pi OS **(Legacy, 64-bit) Lite
   = Bookworm**, Python 3.11 (not Trixie: MediaPipe 1.x crashes on a Pi 4), headless
   (SSH only). **The Pi arrived 2026-10-10** with a **ribbon (CSI) camera**. Powered from a
@@ -30,7 +30,10 @@ the hardware list and mounting notes are in `README.md`; read it first.
   - "Phone" hand (thumb + pinky out) held vertical: `answer_call`; held horizontal,
     either way round: `end_call`.
   - Index-finger circles clockwise / counter-clockwise: volume up / down (kept; they
-    worked well). The first step needs 360°, then one step per 180°.
+    worked well). The first step needs 270° (lowered from 360° because clockwise felt
+    hard), then one step per 180°.
+  - Next / previous **repeat every 2 s while held** (`static.repeat_gestures`,
+    `repeat_s`); the user asked for this on 2026-10-13.
   - `thumb_down` is unmapped. The old swipe and fist↔open gestures are still in the
     code but switched off (`null`) in the mapping.
 - **Safety beats speed.**
@@ -44,21 +47,22 @@ the hardware list and mounting notes are in `README.md`; read it first.
 | Stage | Status |
 |---|---|
 | 1 Vision (camera, landmarks) | Done. **Real Pi 4: ~9 FPS, ~110 ms inference**, ribbon camera via picamera2 |
-| 2 Gestures, gating, YAML mapping, sample record/replay | Static poses + circles. Tuned on synthetic hands; the user tested the old motion set live on the Pi (all fired) |
-| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done; no real footage recorded yet |
-| 3 Action layer: `send(action)` with `print` and `bt_hid` backends | Next |
-| 4 BlueZ HID on the Pi, pairing, auto-reconnect (add to `docs/SETUP.md`) | Next |
-| 5 Answering calls | **Investigate and report only**; HID has no answer key |
-| 6 systemd service (autostart on boot), rotating log, install script | The user asked for autostart 2026-10-13; proposed, not built yet |
+| 2 Gestures, gating, YAML mapping, sample record/replay | Static poses + circles, tested live end to end on the Pi with the iPhone |
+| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done; no in-car footage yet |
+| 3 Action layer: `actions.py` (`print` / `bt_hid`) | Done |
+| 4 BLE HID remote `gesturectl.hid` (BlueZ via dbus-fast) | Done. Paired and tested with the iPhone: every media key works |
+| 5 Answering calls | **Investigate and report only**; a media remote has no answer key |
+| 6 systemd services, rotating logs, install script | Built (`scripts/pi/`) |
+
+On the Pi (2026-10-13):
+- `scripts/pi/setup_bluetooth.sh` has been run: LE-only, `--noplugin=input`.
+- The iPhone (shows as "T (2)") is bonded.
 
 Waiting on the user:
-
-- A live test of the static poses (laptop: `python -m gesturectl`; Pi:
-  `--config config/car.yaml`).
-- Videos per `docs/RECORDING.md`, copied into `videos/`. Then run
-  `python scripts/evaluate_videos.py --config config/car.yaml --fps 9`, tune
-  `config/default.yaml`, and once clips pass, `--export-samples`.
-- iPhone model and iOS version, for Stage 4.
+- In-car footage per `docs/RECORDING.md`. Then evaluate with
+  `--config config/car.yaml --fps 9`, tune, and run `--export-samples`.
+- Check whether the iPhone's on-screen keyboard stays available while connected.
+- Whether clockwise circles feel easier now (first step 270°).
 
 ## Commands
 
@@ -73,7 +77,14 @@ python scripts/record_samples.py --label <gesture|none>
 python scripts/replay_samples.py          # PASS/FAIL per recorded sample
 python scripts/record_video.py videos/<label>_....mp4 --duration 45   # Pi, over SSH
 python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline] [--export-samples]
+# Pi (over SSH, `ssh tk@gesturepi.local`; passwordless sudo works):
+python -m gesturectl.hid status | send <action> | pair      # talk to the running remote
+journalctl -u gesturectl -u gesturectl-hid -f               # live logs; files in logs/
+sudo systemctl stop|start|restart gesturectl gesturectl-hid
+tmux send-keys -t gesturectl '<cmd>' Enter                  # run where the user can watch
 ```
+The user watches long-running Pi commands live with
+`ssh -t tk@gesturepi.local tmux attach -r -t gesturectl`. Run them in that session.
 
 ## Code map and conventions
 
@@ -84,6 +95,22 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline]
   `gestures/` → cooldown → `mapping`)
   → `Event(gesture, action)`.
 - `app.Pipeline` is shared by `__main__` and the recorder.
+- **Actions.** `__main__` calls `actions.make_backend(cfg).send(action)`.
+  - `print` on the laptop.
+  - `bt_hid` (set in `car.yaml`) sends one line over TCP 127.0.0.1:47231 to the
+    Bluetooth remote (`hid/protocol.py`).
+  - The backend never raises; a missing service or phone is a rate-limited warning.
+- **Bluetooth remote** (`python -m gesturectl.hid serve`):
+  - `hid/keys.py`: report map, a 16-bit media-key bitmap with report ID 1;
+    `media+keyboard` is a fallback profile.
+  - `hid/bluez.py`: GATT objects, advertisement, agent.
+  - `hid/service.py`: lifecycle and self-healing.
+  - `hid/pairing.py`: the pairing window. New phones pair only while it's open: when
+    nothing is bonded yet, or for 120 s after `pair`.
+- **Services.** `scripts/pi/install_services.sh` installs `gesturectl-hid` and
+  `gesturectl` (templates in `scripts/pi/`): `Restart=always`, `--log-file logs/*.log`
+  (1 MB × 5). Stop `gesturectl` before `record_video.py`, because the camera is
+  exclusive.
 - **Camera source.** `camera.source: auto` (the default) uses picamera2 when it imports
   and finds a camera, else OpenCV. The same config works on the laptop and the Pi.
 - **Videos.** In `video.py`: the filename is the label (`<gesture>_..._x3`, `none_`,
@@ -106,8 +133,8 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline]
 - **Per-machine overrides.** `--config X` is layered on top of `default.yaml`, merging
   key by key, so tuning done in default.yaml always carries over. `config/car.yaml`
   holds the car/Pi differences: `camera.rotate: 180` (the camera is mounted upside
-  down; user decision 2026-10-13). Always pass `--config config/car.yaml` on the Pi and
-  when evaluating car videos.
+  down; user decision 2026-10-13) and `actions.backend: bt_hid`. Always pass
+  `--config config/car.yaml` on the Pi and when evaluating car videos.
 - **Tests come first.** `tests/synth.py` builds 3D synthetic hands (any pose, size,
   rotation, left or right) and trajectories. Cover positive cases at 10 and 30 FPS with
   both hands, **plus negatives** (accidental-trigger cases).
@@ -150,18 +177,38 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline]
   320x240.
 - **mediapipe logging.** The `W0000 ... inference_feedback_manager` stderr line is
   harmless noise. `GLOG_minloglevel` doesn't silence it.
+- **dbus-fast** (Pi only; requirements marker `sys_platform == "linux"`).
+  - Its `ServiceInterface` keeps the D-Bus interface name in **`self.name`**. Never
+    assign `self.name` in a subclass: that renamed our characteristics and BlueZ
+    rejected the app ("No valid service object found"). Use `self.label`.
+  - It reads D-Bus signatures from annotations at runtime, so `hid/bluez.py` must
+    not use `from __future__ import annotations`.
+  - Decorators are `dbus_method` / `dbus_property`.
+  - `GetManagedObjects` is answered automatically, but only for objects *below* the
+    requested path. Hence the GATT app lives at `/gesturectl/gatt`, with the
+    advertisement and agent outside it.
+  - Only root may call into our process on the system bus (debug with `sudo busctl`).
+- **iOS + BLE HID** (tested on an iPhone 15 / iOS 26.6.1):
+  - **Volume keys are ignored at a 30 ms press; 150 ms works** (`hid.key_press_s`).
+  - Separate play (0xB0) and pause (0xB1) work.
+  - A bonded iPhone that stays connected while the service restarts may **not**
+    re-subscribe to the report. BlueZ then silently drops the notifications.
+    `service.watch()` disconnects a phone that is connected but not subscribed for
+    more than 6 s; the iPhone reconnects within ~3 s and re-subscribes. "Keys
+    ready" means subscribed (StartNotify), never just connected.
+  - Encrypted-read flags on the HID info, report map and report make the iPhone pair
+    ("Just Works", NoInputNoOutput agent).
+  - LE-only mode plus `--noplugin=input` are required, or iOS prefers Classic.
 
 ## Unverified / risks to keep flagging
 
-- Pi 4 FPS with this code.
-- mediapipe 0.10.18 on the real Pi 4 under Bookworm: tested on the laptop with
-  Python 3.11; confirmed working on a Pi 4 by other projects.
+- Autostart after a real reboot, and how long the iPhone takes to reconnect in the car.
+- SD card corruption from car power cuts: no read-only overlay yet.
 - Night driving: RGB can't see a hand in the dark, and MediaPipe is reported poor on
   IR images.
-- Gear-knob grip and release can look like fist → open (pause).
-- iOS may honour only the HID Play/Pause toggle (fallback: map both grabs to
-  `play_pause`).
-- iOS may hide the on-screen keyboard while a HID device is connected.
+- Gear-knob grip and release; quick thumbs-up or raised hands to other drivers
+  (could trigger play/pause).
+- iOS may hide the on-screen keyboard while the remote is connected (unchecked).
 - Call answering on iPhone via HID is unlikely. HFP would risk stealing call audio
   from the car.
 
@@ -171,4 +218,6 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps 12 [--timeline]
   and what is still unverified, then stop for the user to test.
 - Be upfront about anything that can't be verified without the real hardware. Flag it
   rather than guess.
-- The user handles git themselves; don't run state-changing git commands.
+- The user handles git themselves; don't run state-changing git commands unless they
+  ask in that message. On the Pi, test uncommitted code in `~/gesturectl-dev` (via
+  `PYTHONPATH=~/gesturectl-dev/src`), not in the git clone `~/hand-gesture-control`.

@@ -13,4 +13,7 @@ __pycache__/
 videos/
 *.jpg
 
+# Rotating log files written by the programs (--log-file)
+logs/
+
 # samples/ is intentionally tracked: recorded landmark sequences are test data.

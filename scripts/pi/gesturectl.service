@@ -1,0 +1,17 @@
+# Template: scripts/pi/install_services.sh fills in __USER__ and __DIR__.
+[Unit]
+Description=Gesture controller: camera -> hand gestures -> media keys
+After=gesturectl-hid.service
+Wants=gesturectl-hid.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__DIR__/.venv/bin/python -m gesturectl --config config/car.yaml --no-window --log-file logs/gesturectl.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

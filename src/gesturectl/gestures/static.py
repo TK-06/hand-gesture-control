@@ -5,7 +5,8 @@ vertical or horizontal (``phone_vertical`` / ``phone_horizontal``).
 A pose fires once it has been held for ``hold_s`` with the palm roughly still; moving
 the hand restarts the hold, so a hand passing through a pose never fires. It then
 latches: the same gesture can't fire again until something else (another pose, or no
-hand) has been shown for ``release_s``. Directions are as the user sees them, and
+hand) has been shown for ``release_s``. Gestures in ``repeat_gestures`` (next / previous)
+fire again every ``repeat_s`` while still held. Directions are as the user sees them, and
 nothing depends on which hand is used.
 """
 
@@ -44,6 +45,7 @@ class StaticPoseRecognizer(Recognizer):
         self._anchor: np.ndarray | None = None
         self._latched: str | None = None
         self._other_since: float | None = None
+        self._last_fire = 0.0
 
     def update(self, obs: Observation) -> list[str]:
         cfg = self.cfg
@@ -75,8 +77,19 @@ class StaticPoseRecognizer(Recognizer):
                 if t - self._other_since >= cfg.release_s - _EPS:
                     self._latched, self._other_since = None, None
 
-        if name is not None and name != self._latched and t - self._since >= cfg.hold_s - _EPS:
-            self._latched, self._other_since = name, None
+        held = t - self._since >= cfg.hold_s - _EPS
+        if name is not None and name != self._latched and held:
+            self._latched, self._other_since, self._last_fire = name, None, t
+            return [name]
+        if (
+            name is not None
+            and name == self._latched
+            and name in cfg.repeat_gestures
+            and cfg.repeat_s > 0
+            and held
+            and t - self._last_fire >= cfg.repeat_s - _EPS
+        ):
+            self._last_fire = t
             return [name]
         return []
 
