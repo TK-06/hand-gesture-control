@@ -162,7 +162,7 @@ Guides:
 
 - [docs/SETUP.md](docs/SETUP.md): Raspberry Pi setup, from flashing the card to the
   first run.
-- [docs/RECORDING.md](docs/RECORDING.md): the shot list.
+- [docs/RECORDING.md](docs/RECORDING.md): the car session checklist and the shot list.
 
 ## Roadmap
 
@@ -170,11 +170,33 @@ Guides:
 |---|---|---|
 | 1 | Vision: camera, hand landmarks, debug overlay | ✅ done: laptop + Pi 4 ribbon camera (~9 FPS) |
 | 2 | Gestures (held poses + circles), safety gating, YAML mapping, sample recording | ✅ done; tested live on the Pi |
-| 2b | Real-camera video recording + scoring, tuning on in-car footage | tools done; in-car footage still to record |
+| 2b | Real-camera video recording + scoring | ✅ tools done; the footage itself is Stage 7 |
 | 3 | Action layer with pluggable backends (`print`, `bt_hid`) | ✅ done |
 | 4 | Bluetooth LE HID media remote on the Pi (BlueZ): pairing, auto-reconnect, self-healing | ✅ done; tested with an iPhone 15 / iOS 26.6.1 |
 | 5 | Answering calls: investigation only (a media remote has no "answer" key) | later |
-| 6 | Deployment: systemd services (autostart, restart on failure), rotating logs, install script | ✅ done; read-only filesystem for power cuts still to do |
+| 6 | Deployment: systemd services (autostart, restart on failure), rotating logs, install script, live-view tmux session | ✅ done; verified after a reboot |
+| 7 | In-car trial: mount and aim the camera, record footage ([RECORDING.md](docs/RECORDING.md)), tune on it, turn good clips into tests | **next** |
+| 8 | Car install: **power-cut protection** (below), car USB power, permanent mount | after 7 |
+
+### Stage 8: power-cut protection (plan)
+
+Car USB power stops the instant the engine is switched off, with no time for the Pi to
+shut down. If that happens while something is being written, the SD card can get
+corrupted, and one day the Pi won't boot. **Until this is done, run the Pi from a power
+bank in the car and shut it down with `sudo poweroff` before unplugging.**
+
+| Option | How it works | Trade-offs |
+|---|---|---|
+| **Read-only system** (planned) | Raspberry Pi OS's built-in overlay file system (`raspi-config` → Performance Options → Overlay File System). The SD card is never written; changes go to RAM and vanish at power-off, so a power cut can't damage it. | Free and robust. Logs (`logs/`, journal) are lost at every power-off. Updates, pairing a new phone and recording videos need it switched off first, with a reboot each way; a small `scripts/pi/readonly.sh on/off/status` helper is planned to make that one command. |
+| Battery/UPS board with ignition sensing | Keeps the Pi running for a few seconds after the power drops, then shuts it down cleanly. | Keeps logs and a normal writable system. Costs money and needs wiring. Can be combined with the read-only system. |
+
+Also part of Stage 8:
+- **Before switching to read-only:** pair the iPhone and pull the latest code. Both
+  live on the SD card, so changes made while it's read-only are forgotten.
+- **Car power:** a 5 V / 3 A USB-C car charger. After a drive, `vcgencmd get_throttled`
+  must still say `throttled=0x0`.
+- **Heat:** the Pi 4 is rated for 0–50 °C ambient, and a car parked in the sun gets
+  hotter. Mount it out of direct sun, in a case with a heatsink.
 
 ## Project layout
 
@@ -235,7 +257,8 @@ videos/                 camera recordings (gitignored, private)
   and Ethernet ports.
 - **Cables.** Route them away from airbag zones and pedals.
 - **Power cuts.** Car USB power cuts out with the ignition, which can corrupt the SD
-  card. Still to do: a read-only root filesystem (raspi-config overlay).
+  card. See [Stage 8](#stage-8-power-cut-protection-plan); until then, use a power bank
+  and `sudo poweroff`.
 
 ## Known limitations / not yet verified
 

@@ -369,15 +369,11 @@ sudo systemctl start gesturectl
 `record_video.py` counts down 3 seconds, then records. Ctrl+C stops early. Frames are
 saved raw, so the rotation from `car.yaml` is applied later, when evaluating.
 
-**In the car** there's no home Wi-Fi:
-1. Turn on your iPhone's **Personal Hotspot**.
-2. Add the hotspot to the Pi once, while still at home. **Pi:**
-   `sudo nmcli dev wifi connect "<hotspot name>" password "<password>"`
-3. Connect the laptop to the same hotspot and SSH in as usual. A phone with an SSH app
-   such as Termius also works, but needs its own key.
-
-Power the Pi from a **5 V / 3 A** car charger or a power bank. Under-voltage causes
-dropped frames: **Pi:** `vcgencmd get_throttled` should print `throttled=0x0`.
+**In the car** there's no home Wi-Fi, and the car's USB power cuts out with the engine.
+Follow the [car session checklist](RECORDING.md#car-session-checklist). It covers saving
+your iPhone hotspot on the Pi, powering it from a power bank, recording, and shutting
+down safely. Under-voltage causes dropped frames: **Pi:** `vcgencmd get_throttled`
+should print `throttled=0x0`.
 
 ---
 
@@ -399,7 +395,7 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps <your FPS from 
 | Imager: *"Error writing to storage device"* | Close Imager, unplug and replug the card reader, try again. Then try: Imager → OS → **Erase** first, a different USB port (not a hub), running Imager as administrator, another reader, another card. |
 | `Permission denied (publickey)` | The Pi doesn't have your key. Usually the **fingerprint** (`SHA256:...`) was pasted instead of the key. Reflash, using the `Set-Clipboard` command from step 1. Also check the username. |
 | `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED` | Normal after a reflash. **Laptop:** `ssh-keygen -R gesturepi.local`, then ssh again. |
-| `ssh: Could not resolve hostname gesturepi.local` | Wait another minute; check the Wi-Fi details in Imager; or use the Pi's IP address from your router's device list. |
+| `ssh: Could not resolve hostname gesturepi.local` | See [Can't reach the Pi](#cant-reach-the-pi-could-not-resolve-hostname-gesturepilocal) below. Right after flashing: check the Wi-Fi details in Imager. |
 | `[sudo] password for <user>:` | Type the Imager password; nothing shows while typing. Forgot it? There's no recovery: reflash with a new password (the key can stay). |
 | `scp` prints only a `usage:` message | The destination is missing: add ` .` at the end of the command. |
 | `rpicam-hello` lists no cameras | `sudo poweroff`, unplug, reseat the ribbon at both ends (contacts toward HDMI on the Pi side). |
@@ -419,3 +415,34 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps <your FPS from 
 | Keys arrive but volume doesn't change | Check `hid.key_press_s` is 0.15 (iOS ignores shorter volume taps). |
 | After "Forget This Device" the iPhone can't pair again | `python -m gesturectl.hid pair`, then pair within 2 minutes. |
 | Camera busy / `record_video.py` can't open the camera | The gesture service has it: `sudo systemctl stop gesturectl` first. |
+| `sudo systemctl restart gesturectl` hangs for about 90 s | Code from before 2026-10-15: the stop signal interrupted the camera mid-call. Instant workaround: `sudo systemctl kill -s KILL gesturectl` (it restarts itself). Fixed by `git pull`, then `sudo scripts/pi/install_services.sh`, then `sudo systemctl restart gesturectl`. |
+| Pi is on the iPhone hotspot at home | Turn the hotspot off. To make home Wi-Fi win next time: `sudo nmcli connection modify car-hotspot connection.autoconnect-priority -10`. |
+
+### Can't reach the Pi (`Could not resolve hostname gesturepi.local`)
+
+The laptop can't find the Pi on its network. Go through these in order.
+
+1. **Is the Pi on?** The red light should be steady. After plugging it in, give it 1–2
+   minutes to start up before you try SSH.
+2. **Are the laptop and the Pi on the same network?** At home, both on the home Wi-Fi. In
+   the car, both on the iPhone hotspot, with the Personal Hotspot screen open on the
+   iPhone.
+3. **Find the Pi by its address.** Sometimes only the name lookup fails. **Laptop
+   (PowerShell):**
+   ```powershell
+   $net = "192.168.1"    # home Wi-Fi: the first three numbers of the laptop's address (ipconfig); iPhone hotspot: "172.20.10"
+   $pings = 1..254 | ForEach-Object { [System.Net.NetworkInformation.Ping]::new().SendPingAsync("$net.$_", 400) }
+   [System.Threading.Tasks.Task]::WaitAll($pings)
+   arp -a | Select-String "$net\." | Select-String "dc-a6-32|e4-5f-01|d8-3a-dd|28-cd-c1|b8-27-eb|2c-cf-67"
+   ```
+   It prints the Pi's line (Raspberry Pi network cards start with those numbers), for
+   example `192.168.1.42   dc-a6-32-...`. Then `ssh tk@192.168.1.42`.
+   Nothing printed means the Pi isn't on that network at all.
+4. **Still nothing: restart the Pi.** Unplug the power, wait 5 seconds, plug it back in,
+   wait 2 minutes, then try `ssh tk@gesturepi.local` again. (Normally you'd use
+   `sudo poweroff` first, but that needs SSH. One unplug is a small risk.)
+5. **Still nothing: it may be on the other network.** If you saved and tested the car
+   hotspot ([RECORDING.md](RECORDING.md#car-session-checklist) step 1), turn the hotspot
+   on, connect the laptop to it, and try again with `$net = "172.20.10"`. Otherwise
+   check your router's device list, or plug in a monitor (micro-HDMI) and keyboard and
+   run `nmcli dev` to see which Wi-Fi it's on.
