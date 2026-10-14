@@ -42,40 +42,43 @@ the hardware list and mounting notes are in `README.md`; read it first.
   - A 1 s global cooldown applies (repeated circling is exempt).
   - Hands that are too small, outside the active zone, or low-confidence are ignored.
 
-## Status (2026-10-13)
+## Status (2026-10-14)
 
 | Stage | Status |
 |---|---|
 | 1 Vision (camera, landmarks) | Done. **Real Pi 4: ~9 FPS, ~110 ms inference**, ribbon camera via picamera2 |
 | 2 Gestures, gating, YAML mapping, sample record/replay | Static poses + circles, tested live end to end on the Pi with the iPhone |
-| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done; no in-car footage yet |
+| 2b Real-camera videos: `record_video.py` (Pi), `evaluate_videos.py` (scoring) | Tools done; the footage is Stage 7 |
 | 3 Action layer: `actions.py` (`print` / `bt_hid`) | Done |
 | 4 BLE HID remote `gesturectl.hid` (BlueZ via dbus-fast) | Done. Paired and tested with the iPhone: every media key works |
 | 5 Answering calls | **Investigate and report only**; a media remote has no answer key |
-| 6 systemd services, rotating logs, install script | Built (`scripts/pi/`) |
+| 6 systemd services, rotating logs, install script | Done (`scripts/pi/`), verified after a reboot; plus `gesturectl-tmux` |
+| 7 In-car trial: footage per `docs/RECORDING.md`, tuning | **Next**, waiting on the user's car session |
+| 8 Car install: power-cut protection, car power, mount | Planned (README "Stage 8"): overlay FS via raspi-config + a planned `scripts/pi/readonly.sh` helper; UPS/ignition-sense HAT as the alternative. Until then: power bank + `sudo poweroff` |
 
 On the Pi (2026-10-13):
 - `scripts/pi/setup_bluetooth.sh` has been run: LE-only, `--noplugin=input`.
 - The iPhone (shows as "T (2)") is bonded.
 
 Waiting on the user:
-- In-car footage per `docs/RECORDING.md`. Then evaluate with
+- The car session in `docs/RECORDING.md` ("Car session checklist": clips A, D, G,
+  hotspot saved as NetworkManager profile `car-hotspot`). Then evaluate with
   `--config config/car.yaml --fps 9`, tune, and run `--export-samples`.
 - Check whether the iPhone's on-screen keyboard stays available while connected.
-- **Left-hand clockwise circles are still hard; the right hand is fine** (user,
-  2026-10-13). Desk clips: `videos/circle_cw_{left,right}_desk_1.mp4` (laptop and Pi,
-  gitignored). Two causes found:
-  - The index pointing toward the camera was read as curled, so the pose flipped to
-    FIST/THUMB and the circle reset. **Fixed** by `geometry.index_pointing`
-    (`point_straightness`, `point_min_alignment`): left clip 3/5 at `--fps 9`.
-  - With `tracker.num_hands: 1` MediaPipe can lock onto a resting hand (e.g. at the
-    chin, read as THUMB: a false `next` every 2 s). `num_hands: 2` gave left 4/5 and
-    continuous circling on the right clip (0/5 with one hand), but costs 25 vs 14 ms
-    per frame on the laptop. **Not adopted:** measure FPS on the Pi first; at ~5 fps
-    circles may exceed `max_turn_deg`.
-  - The Pi doesn't have the fix yet: after a push, `git pull`,
-    `sudo scripts/pi/install_services.sh` (adds `gesturectl-tmux`), then
-    `sudo systemctl restart gesturectl` (`enable --now` doesn't restart a running service).
+
+Left-hand clockwise circles (was the open problem): **fixed, confirmed live on the Pi**
+(user, 2026-10-13: "everything works really well"; all gestures at the desk).
+- Cause: the index pointing toward the camera was read as curled, so the pose flipped
+  to FIST/THUMB and the circle reset. Fix: `geometry.index_pointing`
+  (`point_straightness`, `point_min_alignment`), commit 870f8d2. Desk clips:
+  `videos/circle_cw_{left,right}_desk_1.mp4` (gitignored, laptop and Pi).
+- `tracker.num_hands: 2` would also stop MediaPipe locking onto a resting hand (seen
+  once in a desk clip: chin hand read as THUMB, false `next`), but costs 25 vs 14 ms per
+  frame on the laptop and is unmeasured on the Pi. **Not adopted;** revisit only if
+  in-car footage shows wrong-hand triggers.
+- After a push the Pi needs `git pull`, `sudo scripts/pi/install_services.sh` (only
+  when unit files changed), then `sudo systemctl restart gesturectl` (`enable --now`
+  doesn't restart a running service).
 
 ## Commands
 
@@ -189,6 +192,18 @@ The user watches long-running Pi commands live with
   On Bookworm it's built against numpy 1.x, which matches the Pi pin (1.26.4).
   Verified on the real Pi (Trixie, 2026-10-13): `auto` picked it and it streamed
   320x240.
+- **Service stop must not interrupt the camera.** `systemctl restart gesturectl` hung
+  for 90 s on 2026-10-15 (`State 'stop-sigterm' timed out. Killing.`).
+  - Cause (strongly indicated, probe not yet run on the Pi): the old SIGTERM handler
+    raised `KeyboardInterrupt` at an arbitrary point, usually inside picamera2's
+    `capture_array()`, and `camera.close()` then blocked.
+  - Fix: SIGTERM only sets a `threading.Event`; the loop checks it between frames
+    (`tests/test_main.py`). `gesturectl.service` also has `TimeoutStopSec=10`.
+  - Needs `git pull` + `sudo scripts/pi/install_services.sh` + restart on the Pi.
+    Verify there: `time sudo systemctl restart gesturectl` should take a few seconds.
+- **NetworkManager picks the hotspot at home.** The saved `car-hotspot` profile must
+  have `connection.autoconnect-priority -10` so the home Wi-Fi wins when both are in
+  range (the Pi stuck to the hotspot on 2026-10-15 and became unreachable).
 - **mediapipe logging.** The `W0000 ... inference_feedback_manager` stderr line is
   harmless noise. `GLOG_minloglevel` doesn't silence it.
 - **dbus-fast** (Pi only; requirements marker `sys_platform == "linux"`).

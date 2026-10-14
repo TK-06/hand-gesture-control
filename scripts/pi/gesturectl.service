@@ -12,6 +12,8 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=__DIR__/.venv/bin/python -m gesturectl --config config/car.yaml --no-window --log-file logs/gesturectl.log
 Restart=always
 RestartSec=5
+# Safety net: a clean stop takes about one frame; never wait systemd's default 90 s
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target

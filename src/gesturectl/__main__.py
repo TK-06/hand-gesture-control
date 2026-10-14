@@ -11,6 +11,7 @@ import argparse
 import logging
 import signal
 import sys
+import threading
 import time
 
 from gesturectl.actions import make_backend
@@ -24,6 +25,11 @@ BANNER_S = 1.5
 STATS_EVERY_S = 5.0
 MAX_EMPTY_READS = 50
 
+# Set by SIGTERM (systemd stop). The loop checks it between frames, so the camera and
+# tracker are never interrupted mid-call: picamera2 interrupted inside capture_array()
+# could then hang in close() until systemd killed it 90 s later.
+_stop = threading.Event()
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="gesturectl", description=__doc__.splitlines()[0])
@@ -35,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     setup_logging(args.log_level, args.log_file)
-    signal.signal(signal.SIGTERM, _stop_on_sigterm)  # systemd stop: shut down cleanly
+    _stop.clear()
+    signal.signal(signal.SIGTERM, _request_stop)  # systemd stop: finish the frame, then shut down
     cfg = load_config(args.config)
     backend = make_backend(cfg)
     try:
@@ -60,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     empty_reads = 0
     frames = frames_with_hand = 0
     try:
-        while True:
+        while not _stop.is_set():
             result = pipeline.step()
             if result is None:
                 empty_reads += 1
@@ -110,12 +117,14 @@ def main(argv: list[str] | None = None) -> int:
         backend.close()
         if window:
             cv2.destroyAllWindows()
+    if _stop.is_set():
+        log.info("stop requested (SIGTERM)")
     log.info("stopped after %d frames", frames)
     return 0
 
 
-def _stop_on_sigterm(signum, frame) -> None:
-    raise KeyboardInterrupt
+def _request_stop(signum, frame) -> None:
+    _stop.set()
 
 
 if __name__ == "__main__":
