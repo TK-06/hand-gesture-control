@@ -192,18 +192,27 @@ The user watches long-running Pi commands live with
   On Bookworm it's built against numpy 1.x, which matches the Pi pin (1.26.4).
   Verified on the real Pi (Trixie, 2026-10-13): `auto` picked it and it streamed
   320x240.
-- **Service stop must not interrupt the camera.** `systemctl restart gesturectl` hung
-  for 90 s on 2026-10-15 (`State 'stop-sigterm' timed out. Killing.`).
-  - Cause (strongly indicated, probe not yet run on the Pi): the old SIGTERM handler
-    raised `KeyboardInterrupt` at an arbitrary point, usually inside picamera2's
-    `capture_array()`, and `camera.close()` then blocked.
-  - Fix: SIGTERM only sets a `threading.Event`; the loop checks it between frames
-    (`tests/test_main.py`). `gesturectl.service` also has `TimeoutStopSec=10`.
-  - Needs `git pull` + `sudo scripts/pi/install_services.sh` + restart on the Pi.
-    Verify there: `time sudo systemctl restart gesturectl` should take a few seconds.
-- **NetworkManager picks the hotspot at home.** The saved `car-hotspot` profile must
-  have `connection.autoconnect-priority -10` so the home Wi-Fi wins when both are in
-  range (the Pi stuck to the hotspot on 2026-10-15 and became unreachable).
+- **The gesture program can freeze with no output (root cause still unknown).** On
+  2026-10-15 `systemctl restart gesturectl` "hung" for 90 s, twice
+  (`State 'stop-sigterm' timed out. Killing.`).
+  - Evidence (`logs/gesturectl.log`): the program had stopped logging its 5-s stats
+    lines minutes *before* the restart (last line 00:53:01, restart at 00:55:59; and
+    00:58:28 vs 01:04:40). It was already frozen, its main thread stuck in native
+    code, so it could not act on SIGTERM and systemd had to SIGKILL it. The Bluetooth
+    remote was idle at those moments and its socket calls have timeouts.
+  - **Not reproduced:** stopping the old code by hand (3 runs) and under systemd
+    (1 run) took 2-3 s. An earlier guess that the SIGTERM handler interrupting the
+    camera mid-call was the cause was wrong as the explanation for the hangs.
+  - Mitigations in place: a stall watchdog (`--stall-timeout`, default 20 s) dumps
+    every thread's stack to `logs/gesturectl-stall.log` and exits with status 1, so
+    systemd restarts the service; SIGTERM is flag-based (`_stop`), checked between
+    frames; `TimeoutStopSec=10`.
+  - **To do when it happens again:** read `logs/gesturectl-stall.log`. The stack
+    shows whether it was `capture_array` (camera), `detect_for_video` (MediaPipe) or
+    something else, and that decides the real fix.
+- **Pi clock.** There is no battery clock, so timestamps in `logs/` jump back after a
+  reboot (e.g. 01:07:15 then 01:07:10). The systemd journal is volatile (lost on
+  reboot); the files in `logs/` survive.
 - **mediapipe logging.** The `W0000 ... inference_feedback_manager` stderr line is
   harmless noise. `GLOG_minloglevel` doesn't silence it.
 - **dbus-fast** (Pi only; requirements marker `sys_platform == "linux"`).

@@ -12,7 +12,8 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=__DIR__/.venv/bin/python -m gesturectl --config config/car.yaml --no-window --log-file logs/gesturectl.log
 Restart=always
 RestartSec=5
-# Safety net: a clean stop takes about one frame; never wait systemd's default 90 s
+# A clean stop takes about one frame. A frozen program can't react to SIGTERM, so don't
+# wait systemd's default 90 s before killing it.
 TimeoutStopSec=10
 
 [Install]

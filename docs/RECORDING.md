@@ -41,14 +41,10 @@ Personal Hotspot.
 3. **Pi:** save the hotspot. This only saves it; the Pi stays on your home Wi-Fi.
    ```bash
    read -rsp "Hotspot password: " PSK; echo
-   sudo nmcli connection add type wifi con-name car-hotspot ifname wlan0 ssid "<exact name>" connection.autoconnect-priority -10 wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PSK"
+   sudo nmcli connection add type wifi con-name car-hotspot ifname wlan0 ssid "<exact name>" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PSK"
    unset PSK
    ```
    The password doesn't show while you type it; press Enter at the end.
-   `autoconnect-priority -10` makes **home Wi-Fi win** whenever both are in range, so
-   the Pi never sticks to a hotspot you left on at home. In the car, where home Wi-Fi
-   isn't in range, it uses the hotspot. Saved it without this? Fix it with
-   `sudo nmcli connection modify car-hotspot connection.autoconnect-priority -10`.
    `nmcli connection show` should now list `car-hotspot`.
    Made a typo? `sudo nmcli connection delete car-hotspot`, then save it again.
 4. **Test it at home.** This takes 2 minutes and saves trouble in the car.

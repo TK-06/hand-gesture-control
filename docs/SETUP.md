@@ -415,8 +415,7 @@ python scripts/evaluate_videos.py --config config/car.yaml --fps <your FPS from 
 | Keys arrive but volume doesn't change | Check `hid.key_press_s` is 0.15 (iOS ignores shorter volume taps). |
 | After "Forget This Device" the iPhone can't pair again | `python -m gesturectl.hid pair`, then pair within 2 minutes. |
 | Camera busy / `record_video.py` can't open the camera | The gesture service has it: `sudo systemctl stop gesturectl` first. |
-| `sudo systemctl restart gesturectl` hangs for about 90 s | Code from before 2026-10-15: the stop signal interrupted the camera mid-call. Instant workaround: `sudo systemctl kill -s KILL gesturectl` (it restarts itself). Fixed by `git pull`, then `sudo scripts/pi/install_services.sh`, then `sudo systemctl restart gesturectl`. |
-| Pi is on the iPhone hotspot at home | Turn the hotspot off. To make home Wi-Fi win next time: `sudo nmcli connection modify car-hotspot connection.autoconnect-priority -10`. |
+| Gestures stop working and `sudo systemctl restart gesturectl` hangs for about 90 s | The program froze. Instant workaround: `sudo systemctl kill -s KILL gesturectl` (it restarts by itself 5 s later). Since 2026-10-15 it also notices a freeze by itself (no frame for 20 s) and restarts; `logs/gesturectl-stall.log` then holds the stack of where it was stuck: keep it and send it to Claude. |
 
 ### Can't reach the Pi (`Could not resolve hostname gesturepi.local`)
 
@@ -426,7 +425,11 @@ The laptop can't find the Pi on its network. Go through these in order.
    minutes to start up before you try SSH.
 2. **Are the laptop and the Pi on the same network?** At home, both on the home Wi-Fi. In
    the car, both on the iPhone hotspot, with the Personal Hotspot screen open on the
-   iPhone.
+   iPhone. **This is the usual cause:** some routers broadcast more than one network
+   (for example a 5 GHz one with its own name), and the laptop can quietly join the
+   other one. The Pi uses the name you typed into Imager. Check the laptop's with
+   `netsh wlan show interfaces` (**Laptop (PowerShell)**, look at `SSID`) and join the
+   same one.
 3. **Find the Pi by its address.** Sometimes only the name lookup fails. **Laptop
    (PowerShell):**
    ```powershell
